@@ -7,12 +7,14 @@
     "start": "node server.js"
   },
   "engines": {
-    "node": ">=22.5"
+    "node": ">=22.15"
   },
   "keywords": [
     "claude-code",
     "codex",
     "gemini-cli",
+    "deepseek",
+    "deepseek-harness",
     "opencode",
     "continue",
     "usage",

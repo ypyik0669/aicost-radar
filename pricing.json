@@ -96,11 +96,35 @@
     "cacheWrite": 0,
     "cacheRead": 0.31
   },
-  "deepseek": {
-    "input": 0.28,
-    "output": 0.42,
+  "deepseek-v4-flash": {
+    "input": 0.14,
+    "output": 0.28,
     "cacheWrite": 0,
-    "cacheRead": 0.028
+    "cacheRead": 0.0028
+  },
+  "deepseek-v4-pro": {
+    "input": 0.435,
+    "output": 0.87,
+    "cacheWrite": 0,
+    "cacheRead": 0.003625
+  },
+  "deepseek-chat": {
+    "input": 0.14,
+    "output": 0.28,
+    "cacheWrite": 0,
+    "cacheRead": 0.0028
+  },
+  "deepseek-reasoner": {
+    "input": 0.14,
+    "output": 0.28,
+    "cacheWrite": 0,
+    "cacheRead": 0.0028
+  },
+  "deepseek": {
+    "input": 0.14,
+    "output": 0.28,
+    "cacheWrite": 0,
+    "cacheRead": 0.0028
   },
   "grok": {
     "input": 3,

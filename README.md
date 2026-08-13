@@ -1,8 +1,8 @@
 # AIcost Radar 📟
 
-本地 AI 编程工具用量雷达 —— 零依赖、纯本地、单文件前端。自动扫描 Claude Code、Codex、Gemini CLI、OpenCode、Continue 留在本机的会话日志，聚合出模型、成本、token、缓存命中率、会话记录，用一个暗色发光风格的面板展示。数据不出本机。
+本地 AI 编程工具用量雷达 —— 零依赖、纯本地、单文件前端。自动扫描 Claude Code、Codex、Gemini CLI、DeepSeek Harness、OpenCode、Continue 留在本机的会话日志，聚合出模型、成本、token、缓存命中率、会话记录，用一个暗色发光风格的面板展示。数据不出本机。
 
-**A local usage & cost radar for AI coding tools.** Zero dependencies, fully offline, single-file frontend. It scans the session logs that Claude Code, Codex, Gemini CLI, OpenCode and Continue already write to your machine, and aggregates models, costs, tokens, cache hit rate and per-session history into a dark glow dashboard. Nothing leaves your machine. *(English notes inline below.)*
+**A local usage & cost radar for AI coding tools.** Zero dependencies, fully offline, single-file frontend. It scans the session logs that Claude Code, Codex, Gemini CLI, DeepSeek Harness, OpenCode and Continue already write to your machine, and aggregates models, costs, tokens, cache hit rate and per-session history into a dark glow dashboard. Nothing leaves your machine. *(English notes inline below.)*
 
 ## 支持的数据源 / Supported sources
 
@@ -11,7 +11,8 @@
 | **Claude Code** | `~/.claude/projects/**/*.jsonl` | 含子代理（subagent）转录 |
 | **Codex** | `~/.codex/sessions/**/*.jsonl` | 自动剥离 relay 前缀（`xxx::model`） |
 | **Gemini CLI** | `~/.gemini/tmp/*/chats/*.json` | 逐消息 token 记录 |
-| **OpenCode** | `~/.local/share/opencode/opencode.db` | SQLite，需 Node ≥ 22.5（内置 `node:sqlite`） |
+| **[DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness)** (dsh) | `~/.dsh/sessions/**/session.jsonl.zstd` | 多 zstd frame 拼接，逐段解压（需内置 `node:zlib` zstd） |
+| **OpenCode** | `~/.local/share/opencode/opencode.db` | SQLite，内置 `node:sqlite` |
 | **Continue** (VSCode) | `~/.continue/dev_data/*/tokensGenerated.jsonl` | 逐请求 token 记录 |
 
 不存在的目录会自动跳过；面板上的数据源筛选按钮只显示实际有数据的工具。任何新模型（DeepSeek、Grok、本地模型……）只要出现在这些日志里就会自动显示，未配置定价时按 `default` 条目估算。
@@ -31,7 +32,9 @@ Windows 用户可以双击 `启动监控.vbs`：后台启动服务（无黑窗�
 
 Windows users can double-click `启动监控.vbs` to start the server hidden and open an Edge app-mode window. The server is single-instance.
 
-**要求 / Requirements**: Node.js ≥ 22.5（仅 OpenCode 数据源需要；其他源任何近代 Node 均可）。无任何 npm 依赖。
+**要求 / Requirements**: Node.js ≥ 22.15（OpenCode 需要内置 `node:sqlite`，DeepSeek Harness 需要内置 zstd 解压；其他数据源任何近代 Node 均可，缺失能力会自动跳过该源而不报错）。无任何 npm 依赖。
+
+Node.js ≥ 22.15 (built-in `node:sqlite` for OpenCode, built-in zstd for DeepSeek Harness). Sources whose runtime capability is missing are skipped silently. No npm dependencies.
 
 ## 功能 / Features
 
@@ -99,7 +102,7 @@ Pricing lives in `pricing.json` (USD per million tokens, longest-substring match
 }
 ```
 
-非文件型来源（如 SQLite）用 `kind: 'custom'` + `load()` 返回会话数组，参考 OpenCode 的实现。文件按 `mtime+size` 缓存，只有变化的文件会被重新解析。前端无需改动——筛选按钮、标签、缓存卡片都是按数据自动生成的。
+日志不是纯文本也没关系——解码放在 `parse` 里就行，`parseDshFile` 就是先把多 frame zstd 逐段解压再按 JSONL 解析。非文件型来源（如 SQLite）用 `kind: 'custom'` + `load()` 返回会话数组，参考 OpenCode 的实现。文件按 `mtime+size` 缓存，只有变化的文件会被重新解析。前端无需改动——筛选按钮、标签、缓存卡片都是按数据自动生成的。
 
 For non-file sources (e.g. SQLite) use `kind: 'custom'` with a `load()` returning an array of session objects — see the OpenCode source. Files are cached by mtime+size, and the frontend adapts automatically (filter buttons, tags, and cache cards are all data-driven).
 

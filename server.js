@@ -286,6 +286,77 @@ function loadOpencodeSessions() {
   return ocCache.sessions;
 }
 
+// ---------- 数据源: DeepSeek Harness (dsh) ----------
+// 日志是多个 zstd frame 拼接的 session.jsonl.zstd,需按 frame magic 逐段解压
+const DSH_DIR = path.join(HOME, '.dsh', 'sessions');
+const ZSTD_MAGIC = Buffer.from([0x28, 0xb5, 0x2f, 0xfd]);
+let zstdDecompressSync = null;
+try { ({ zstdDecompressSync } = require('node:zlib')); } catch {} // Node < 22.15 无内置 zstd
+
+function readDshText(fp) {
+  const raw = fs.readFileSync(fp);
+  if (!fp.endsWith('.zstd')) return raw.toString('utf8');
+  if (!zstdDecompressSync) return '';
+  const parts = [];
+  let i = 0;
+  while ((i = raw.indexOf(ZSTD_MAGIC, i)) !== -1) {
+    // 尾部截断或 payload 内的假 magic 会解压失败,跳过即可
+    try { parts.push(zstdDecompressSync(raw.subarray(i)).toString('utf8')); } catch {}
+    i += 1;
+  }
+  return parts.join('');
+}
+
+function parseDshFile(fp) {
+  const data = {
+    app: 'dsh', id: path.basename(path.dirname(fp)), agent: false,
+    cwd: null, source: null, firstTs: null, lastTs: null,
+    usageEntries: [], events: [],
+  };
+  let title = null;
+  for (const line of readDshText(fp).split('\n')) {
+    if (!line || line[0] !== '{') continue;
+    let e;
+    try { e = JSON.parse(line); } catch { continue; }
+    const ts = e.time || null;
+    if (ts) {
+      if (!data.firstTs || ts < data.firstTs) data.firstTs = ts;
+      if (!data.lastTs || ts > data.lastTs) data.lastTs = ts;
+    }
+    const d = e.data;
+    if (e.type === 'session') {
+      data.id = e.id || data.id;
+      data.cwd = e.cwd || null;
+      if (e.createdAt) data.firstTs = e.createdAt;
+    } else if (e.type === 'session/title' && d && d.title) {
+      title = String(d.title);
+    } else if (e.type === 'assistant/message' && d && d.usage) {
+      const u = d.usage;
+      const src = (d.message && d.message.source) || {};
+      // outputTokens 已含 reasoningTokens（DeepSeek 计费口径），不重复累加
+      data.usageEntries.push({
+        mid: (d.message && d.message.id) || null, rid: null,
+        model: src.model || 'deepseek', ts,
+        u: {
+          in: u.inputTokens || 0,
+          cw: u.cacheWriteTokens || 0,
+          cr: u.cacheReadTokens || 0,
+          out: u.outputTokens || 0,
+        },
+      });
+      if (!data.source && src.provider) data.source = src.provider;
+    } else if (e.type === 'user/message' && d && d.source && d.source.kind === 'user') {
+      // 只要真人输入,插件注入的运行时快照/提醒不算
+      const t = (d.content || []).filter(c => c && c.type === 'text' && c.text).map(c => c.text).join('\n').trim();
+      if (t && data.events.length < MAX_EVENTS_PER_SESSION) {
+        data.events.push({ ts, kind: 'prompt', text: t.slice(0, 300) });
+      }
+    }
+  }
+  if (!data.events.length && title) data.events.push({ ts: data.firstTs, kind: 'prompt', text: title.slice(0, 300) });
+  return data;
+}
+
 // ---------- 数据源: Continue (VSCode 扩展) ----------
 const CONTINUE_DIR = path.join(HOME, '.continue', 'dev_data');
 
@@ -329,6 +400,11 @@ const SOURCES = [
     id: 'gemini', name: 'Gemini CLI', kind: 'files', root: GEMINI_DIR,
     list: () => walkFiles(GEMINI_DIR, 3, (n, p) => n.endsWith('.json') && p.includes('chats')),
     parse: parseGeminiFile,
+  },
+  {
+    id: 'dsh', name: 'DeepSeek Harness', kind: 'files', root: DSH_DIR,
+    list: () => walkFiles(DSH_DIR, 3, n => n === 'session.jsonl.zstd'),
+    parse: parseDshFile,
   },
   {
     id: 'opencode', name: 'OpenCode', kind: 'custom', root: path.dirname(OPENCODE_DB),
