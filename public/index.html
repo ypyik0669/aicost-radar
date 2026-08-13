@@ -170,6 +170,25 @@
   .duo .card { margin-bottom: 0; }
   @media (max-width: 660px) { .duo { grid-template-columns: 1fr; } }
 
+  /* 双列瀑布流:细分 grid 行,JS 按每张卡的实际高度设 row span */
+  #cards { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); column-gap: 12px; grid-auto-rows: 4px; align-items: start; }
+  #cards > .card, #cards > .duo { margin-bottom: 0; }
+  #cards > .w2 { grid-column: 1 / -1; }
+  @media (max-width: 940px) { #cards { grid-template-columns: minmax(0, 1fr); } }
+
+  /* 卡片收起/展开 */
+  .card h2 .clps {
+    background: none; border: none; color: var(--tm); cursor: pointer; flex: none;
+    font-size: 13px; line-height: 1; padding: 3px 7px; border-radius: 7px; font-family: inherit;
+    transition: background .15s, color .15s;
+  }
+  .card h2 .clps:hover { background: var(--chip-hover); color: var(--tp); }
+  .card.min > :not(h2) { display: none !important; }
+  .card.min h2 { margin-bottom: 0; }
+
+  .seg.mini { padding: 2px; border-radius: 8px; }
+  .seg.mini button { padding: 3px 9px; font-size: 11px; border-radius: 6px; }
+
   .legend { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 8px; }
   .legend span { display: inline-flex; align-items: center; gap: 5px; color: var(--ts); font-size: 11px; }
   .legend i, .swatch { width: 9px; height: 9px; border-radius: 2.5px; display: inline-block; flex: none; }
@@ -395,21 +414,23 @@
   .dgok { color: var(--good); font-size: 12px; padding: 8px 2px; }
 
   /* 本机 AI 工具探测 */
-  .tools { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 8px; }
-  .tool { display: flex; align-items: center; gap: 9px; border: 1px solid var(--line); border-radius: 12px; padding: 9px 12px; background: var(--chip); }
-  .tool .tdot { width: 8px; height: 8px; border-radius: 50%; flex: none; background: var(--tm); }
+  .tools { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 8px; }
+  .tool { display: flex; align-items: flex-start; gap: 9px; border: 1px solid var(--line); border-radius: 12px; padding: 9px 12px; background: var(--chip); }
+  .tool .tdot { width: 8px; height: 8px; border-radius: 50%; flex: none; background: var(--tm); margin-top: 5px; }
   .tool.tracked { border-color: rgba(34,211,238,.32); background: linear-gradient(180deg, rgba(34,211,238,.07), rgba(139,92,246,.04)); }
   .tool.tracked .tdot { background: var(--cyan); box-shadow: 0 0 8px rgba(34,211,238,.8); }
   .tool.idle .tdot { background: #64748b; }
+  .tool .tbody { flex: 1; min-width: 0; }
+  .tool .trow { display: flex; align-items: baseline; gap: 8px; }
   .tool .tn { font-size: 12.5px; font-weight: 600; }
-  .tool .tk { font-size: 10.5px; color: var(--tm); margin-top: 1px; }
-  .tool .ts2 { margin-left: auto; font-size: 10px; color: var(--tm); white-space: nowrap; }
+  .tool .ts2 { margin-left: auto; font-size: 10px; color: var(--tm); white-space: nowrap; flex: none; }
   .tool.tracked .ts2 { color: var(--cyan); }
+  .tool .tk { font-size: 10.5px; color: var(--tm); margin-top: 2px; line-height: 1.45; }
 
-  /* 90天贡献图 */
-  .contrib { display: flex; gap: 3px; padding: 4px 0; }
-  .contrib .col { display: flex; flex-direction: column; gap: 3px; }
-  .contrib .cell { width: 13px; height: 13px; border-radius: 3px; background: var(--track); }
+  /* 90天视图(与小时热力图共用一张卡) */
+  .contrib { display: flex; gap: 4px; padding: 4px 0; }
+  .contrib .col { display: flex; flex-direction: column; gap: 4px; }
+  .contrib .cell { width: 18px; height: 18px; border-radius: 4px; background: var(--track); }
 
   /* 卡片拖拽排序 */
   .dragh { cursor: grab; color: var(--tm); font-size: 13px; margin-right: 3px; user-select: none; }
@@ -489,8 +510,14 @@
 </div>
 
 <div class="card" id="heatCard">
-  <h2>🕐 活动热力图 <span class="hint">什么时间烧钱最多（按小时成本）</span></h2>
-  <div style="overflow-x:auto"><table class="heat" id="heat"></table></div>
+  <h2>🕐 活动热力图 <span class="hint" id="heatHint">什么时间烧钱最多（按小时成本）</span>
+    <div class="seg mini" id="heatSeg">
+      <button data-v="hour" class="on">按小时</button>
+      <button data-v="day90">90 天</button>
+    </div>
+  </h2>
+  <div style="overflow-x:auto" id="heatWrapH"><table class="heat" id="heat"></table></div>
+  <div style="overflow-x:auto;display:none" id="heatWrapD"><div class="contrib" id="contrib"></div></div>
 </div>
 
 <div class="card" id="cacheCard">
@@ -518,18 +545,18 @@
     <h2>🤖 模型排行 <span class="hint" id="modelCount"></span></h2>
     <div id="modelList"></div>
   </div>
-  <div class="card">
+  <div class="card" id="projCard">
     <h2>📁 项目分布 <span class="hint">按工作目录</span></h2>
     <div id="projList"></div>
   </div>
 </div>
 
 <div class="duo" id="duoB">
-  <div class="card">
+  <div class="card" id="cmdCard">
     <h2>⌨️ 常用命令</h2>
     <div id="cmdList"></div>
   </div>
-  <div class="card">
+  <div class="card" id="funCard">
     <h2>🎯 趣味统计</h2>
     <div class="fun" id="funList"></div>
   </div>
@@ -553,11 +580,6 @@
 <div class="card" id="achCard">
   <h2>🏆 成就 <span class="hint" id="achHint"></span><button class="btn" id="posterBtn">🎨 生成海报</button></h2>
   <div class="achgrid" id="achGrid"><div class="muted">加载 90 天数据中…</div></div>
-</div>
-
-<div class="card" id="contribCard">
-  <h2>📅 90 天贡献图 <span class="hint">每格一天 · 颜色深浅 = 当日成本</span></h2>
-  <div style="overflow-x:auto"><div class="contrib" id="contrib"></div></div>
 </div>
 
 <div class="card" id="sessCard">
@@ -662,7 +684,7 @@ const FINE = matchMedia('(pointer:fine)').matches;
 const DEFAULT_PREFS = {
   currency: 'USD', rate: 7.25, coffeePrice: 2.5, refreshS: 30, nick: '',
   budgetMonth: 0, budgetDay: 0,
-  cardOrder: [], hiddenCards: [],
+  cardOrder: [], hiddenCards: [], collapsed: [], heatView: 'hour',
   records: { maxDayCost: 0, maxStreak: 0 }, unlockedAch: [], celebrated: {},
 };
 let prefs = { ...DEFAULT_PREFS };
@@ -1149,6 +1171,12 @@ function heatColor(v, max) {
   return `rgb(${c[0]},${c[1]},${c[2]})`;
 }
 function renderHeat() {
+  const v = prefs.heatView === 'day90' ? 'day90' : 'hour';
+  for (const b of $('heatSeg').querySelectorAll('button')) b.classList.toggle('on', b.dataset.v === v);
+  $('heatWrapH').style.display = v === 'hour' ? '' : 'none';
+  $('heatWrapD').style.display = v === 'day90' ? '' : 'none';
+  $('heatHint').textContent = v === 'hour' ? '什么时间烧钱最多（按小时成本）' : '每格一天 · 颜色深浅 = 当日成本';
+  if (v === 'day90') { renderContrib(); return; }
   const dates = Object.keys(DATA.hourly).sort().slice(-14);
   if (!dates.length) { $('heat').innerHTML = '<tr><td class="muted">无数据</td></tr>'; return; }
   let max = 0.001;
@@ -1159,13 +1187,19 @@ function renderHeat() {
       `<td style="background:${heatColor(v, max)}" data-d="${d}" data-h="${h}" data-v="${v}"></td>`).join('') + '</tr>';
   }
   $('heat').innerHTML = html;
-  $('heat').addEventListener('mousemove', ev => {
-    const td = ev.target.closest('td[data-v]');
-    if (!td) return hideTip();
-    showTip(ev, `<div class="t">${td.dataset.d} ${td.dataset.h}:00</div><div class="r"><span>成本</span><b>${fmtCost(+td.dataset.v)}</b></div>`);
-  });
-  $('heat').addEventListener('mouseleave', hideTip);
 }
+$('heatSeg').addEventListener('click', e => {
+  const b = e.target.closest('button');
+  if (!b) return;
+  prefs.heatView = b.dataset.v; savePrefs();
+  if (DATA) renderHeat();
+});
+$('heat').addEventListener('mousemove', ev => {
+  const td = ev.target.closest('td[data-v]');
+  if (!td) return hideTip();
+  showTip(ev, `<div class="t">${td.dataset.d} ${td.dataset.h}:00</div><div class="r"><span>成本</span><b>${fmtCost(+td.dataset.v)}</b></div>`);
+});
+$('heat').addEventListener('mouseleave', hideTip);
 
 const HALO_C = 2 * Math.PI * 64;
 function cacheAgg(appIds) {
@@ -1426,14 +1460,14 @@ function renderTools() {
   const sorted = [...list].sort((a, b) => (rank[a.status] - rank[b.status]) || a.name.localeCompare(b.name));
   const nTracked = list.filter(t => t.status === 'tracked').length;
   $('toolHint').textContent = `探测到 ${list.length} 个 · 已接入用量 ${nTracked} 个`;
-  const label = t => t.status === 'tracked' ? '已接入'
-    : t.status === 'idle' ? '无近期用量'
-    : t.note ? t.note : '未接入';
+  const label = t => t.status === 'tracked' ? '已接入' : t.status === 'idle' ? '无近期用量' : '未接入';
   $('toolList').innerHTML = sorted.map(t => `
     <div class="tool ${t.status}" title="${esc(t.note || '')}">
       <span class="tdot"></span>
-      <div><div class="tn">${esc(t.name)}</div><div class="tk">${esc(t.kind)}</div></div>
-      <span class="ts2">${esc(label(t))}</span>
+      <div class="tbody">
+        <div class="trow"><span class="tn">${esc(t.name)}</span><span class="ts2">${esc(label(t))}</span></div>
+        <div class="tk">${esc(t.kind)}${t.note ? ' · ' + esc(t.note) : ''}</div>
+      </div>
     </div>`).join('');
 }
 
@@ -1653,7 +1687,7 @@ function contribColor(v, max) {
   return `rgb(${c[0]},${c[1]},${c[2]})`;
 }
 function renderContrib() {
-  if (!ACH) return;
+  if (!ACH) { $('contrib').innerHTML = '<div class="muted" style="padding:4px 2px">加载 90 天数据中…</div>'; return; }
   const byDate = new Map();
   const sumDay = d => { let c = 0; for (const ms of Object.values(d.byApp)) for (const u of Object.values(ms)) c += u.cost; return c; };
   for (const d of ACH.daily) byDate.set(d.date, sumDay(d));
@@ -1776,13 +1810,13 @@ $('posterBtn').addEventListener('click', () => {
   });
 });
 
-/* ---------- 卡片排序 + 显隐 ---------- */
+/* ---------- 卡片排序 + 显隐 + 双列瀑布流 ---------- */
 const BLOCKS = [
   ['chartCard', '每日成本图'], ['heatCard', '活动热力图'], ['cacheCard', '缓存效率'],
   ['duoA', '模型 + 项目'], ['duoB', '命令 + 趣味'], ['subCard', '订阅回本'], ['diagCard', '省钱诊断'],
-  ['toolCard', '本机 AI 工具'], ['achCard', '成就'],
-  ['contribCard', '90天贡献图'], ['sessCard', '会话记录'],
+  ['toolCard', '本机 AI 工具'], ['achCard', '成就'], ['sessCard', '会话记录'],
 ];
+const WIDE = new Set(['chartCard', 'duoA', 'duoB', 'sessCard']);
 let dragBlock = null;
 function applyLayout() {
   const main = $('cards');
@@ -1798,7 +1832,52 @@ function applyLayout() {
     order.splice(at, 0, id);
   });
   for (const id of order) main.appendChild($(id));
-  for (const [id] of BLOCKS) $(id).style.display = (prefs.hiddenCards || []).includes(id) ? 'none' : '';
+  for (const [id] of BLOCKS) {
+    $(id).classList.toggle('w2', WIDE.has(id));
+    $(id).style.display = (prefs.hiddenCards || []).includes(id) ? 'none' : '';
+  }
+  packAll();
+}
+
+/* 瀑布流:按每个块的实际内容高度换算成 4px 细分行的 span */
+const PACK_ROW = 4, PACK_GAP = 12;
+function packBlock(el) {
+  if (!el || el.style.display === 'none') return;
+  const h = el.getBoundingClientRect().height;
+  if (h > 0) el.style.gridRowEnd = 'span ' + Math.max(3, Math.ceil((h + PACK_GAP) / PACK_ROW));
+}
+function packAll() { for (const el of $('cards').children) packBlock(el); }
+const packRO = new ResizeObserver(es => es.forEach(e => packBlock(e.target)));
+for (const el of $('cards').children) packRO.observe(el);
+
+/* 卡片收起/展开(含 duo 内的子卡),状态存 prefs.collapsed */
+function applyCollapse() {
+  for (const h2 of $('cards').querySelectorAll('.card > h2')) {
+    const card = h2.parentElement, b = h2.querySelector('.clps');
+    if (!card.id || !b) continue;
+    const min = (prefs.collapsed || []).includes(card.id);
+    card.classList.toggle('min', min);
+    b.textContent = min ? '＋' : '－';
+    b.title = min ? '展开' : '收起';
+  }
+}
+function initCollapse() {
+  for (const h2 of $('cards').querySelectorAll('.card > h2')) {
+    const card = h2.parentElement;
+    if (!card.id || h2.querySelector('.clps')) continue;
+    const b = document.createElement('button');
+    b.className = 'clps';
+    if (!h2.querySelector('.hint') && !h2.querySelector('.seg')) b.style.marginLeft = 'auto';
+    h2.appendChild(b);
+    b.addEventListener('click', e => {
+      e.stopPropagation();
+      const set = new Set(prefs.collapsed || []);
+      set.has(card.id) ? set.delete(card.id) : set.add(card.id);
+      prefs.collapsed = [...set]; savePrefs();
+      applyCollapse();
+    });
+  }
+  applyCollapse();
 }
 function initDrag() {
   for (const [id] of BLOCKS) {
@@ -1824,13 +1903,23 @@ function initDrag() {
   $('cards').addEventListener('dragover', e => {
     if (!dragBlock) return;
     e.preventDefault();
-    const others = [...$('cards').children].filter(c => c !== dragBlock);
-    const after = others.find(b => e.clientY < b.getBoundingClientRect().top + b.offsetHeight / 2);
-    $('cards').insertBefore(dragBlock, after || null);
+    // 双列布局:找离指针最近的块,按指针在它上/下半区决定插前还是插后
+    const others = [...$('cards').children].filter(c => c !== dragBlock && c.style.display !== 'none');
+    let best = null, bestD = Infinity;
+    for (const c of others) {
+      const r = c.getBoundingClientRect();
+      const d = Math.hypot(e.clientX - (r.left + r.width / 2), e.clientY - (r.top + r.height / 2));
+      if (d < bestD) { bestD = d; best = c; }
+    }
+    if (!best) return;
+    const r = best.getBoundingClientRect();
+    const after = e.clientY > r.top + r.height / 2;
+    $('cards').insertBefore(dragBlock, after ? best.nextSibling : best);
   });
 }
 applyLayout();
 initDrag();
+initCollapse();
 
 /* ---------- 数据导出 ---------- */
 function dl(name, text, mime) {
@@ -2050,7 +2139,7 @@ if (!REDUCED) {
   document.querySelectorAll('.card').forEach(c => { c.classList.add('rv'); io.observe(c); });
 }
 
-window.addEventListener('resize', () => DATA && render());
+window.addEventListener('resize', () => { if (DATA) render(); packAll(); });
 document.addEventListener('keydown', e => {
   if (e.key === 'Escape') { drawer.classList.remove('open'); modal.classList.remove('open'); }
 });
