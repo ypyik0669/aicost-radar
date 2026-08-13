@@ -58,8 +58,11 @@ Node.js ≥ 22.15 (built-in `node:sqlite` for OpenCode, built-in zstd for DeepSe
 - 📊 每日成本堆叠柱状图（按模型着色，悬停看明细）
 - 🕐 24 小时 × 14 天活动热力图，可一键切换 90 天 GitHub 风格贡献视图
 - 🧊 缓存命中率 Halo 仪表盘（总体 + 按工具）
+- ⏱️ **5 小时计费窗口**（ccusage 同款分窗算法）：当前订阅窗口进度、已烧 token/成本、按当前速率外推、以 90 天峰值窗口为限额基线的告警
+- 🧯 **错误分析**（sniffly 式）：Claude Code 工具报错按类型排行（命令失败 / 文件未找到 / 编辑串不匹配 / 权限被拒 / 超时…），附样例与每百条消息错误率
+- 📊 成本图支持**日 / 周 / 月**粒度切换
 - 🤖 模型排行 / 📁 项目分布 / ⌨️ 常用命令
-- 💬 会话记录：每个终端窗口一行，点击展开该会话的全部输入和命令
+- 💬 会话记录：每个终端窗口一行，点击展开该会话的全部输入和命令；**子代理会话折叠在父会话下**，点 `▸ N 子代理` 徽章展开
 - 🎯 趣味统计：连续活跃天数、最烧钱的一天、夜猫指数……
 - ⚙️ **面板内自定义定价**：点右上角齿轮直接编辑，保存后立即重算全部成本
 - 🔄 自动刷新（间隔可调）；数据源与天数筛选
@@ -71,7 +74,6 @@ Node.js ≥ 22.15 (built-in `node:sqlite` for OpenCode, built-in zstd for DeepSe
 - 🎉 **破纪录彩带**：单日成本 / 连续天数破纪录时全屏 confetti
 - 🧩 **卡片自由布局**：双列瀑布流自适应排布，拖 ☰ 排序、每张卡可一键收起/展开、设置里勾选显隐，全部记住
 - 📤 **数据导出**：每日成本 CSV / 会话 CSV / 原始 JSON
-- ⏱️ **近 5 小时窗口**：粗粒度参考订阅限额节奏
 
 ## 四件别处没有的事 / Four things you won't find elsewhere
 
@@ -131,6 +133,10 @@ Daily token history is archived locally so rotated-away logs don't shrink your s
 
 Pricing lives in `pricing.json` (USD per million tokens, longest-substring match on the model name). Edit the file directly or click the ⚙️ gear in the dashboard — both hot-reload and recompute all costs. `default` is the fallback for unrecognized models; set a `0/0/0/0` entry for local models.
 
+定价 tab 里还有一个「🔄 同步最新价格」按钮：点击时服务端向 [LiteLLM 官方价格表](https://github.com/BerriAI/litellm/blob/main/model_prices_and_context_window.json)发**一次**请求，把能按模型名匹配上的条目填成官方价并用黄框标出，你检查后点保存才生效。**这是整个面板唯一的联网操作，且只在你点击时发生。**
+
+The 「sync latest prices」 button fetches the LiteLLM price table once (server-side, only when clicked — the single optional network call in the whole project), fills matched entries into the table highlighted in yellow, and applies nothing until you hit save.
+
 ## 添加新数据源 / Adding a new source
 
 所有数据源都注册在 `server.js` 的 `SOURCES` 数组里，加一个工具只需要一项：
@@ -166,9 +172,9 @@ For non-file sources (e.g. SQLite) use `kind: 'custom'` with a `load()` returnin
 
 ## 隐私 / Privacy
 
-一切都在本机完成：服务只监听 `127.0.0.1`，只读取本地日志文件，不发出任何网络请求，不上传任何数据。
+一切都在本机完成：服务只监听 `127.0.0.1`，只读取本地日志文件，不上传任何数据。唯一的例外是定价 tab 里的「同步最新价格」按钮——**只在你显式点击时**向 LiteLLM 价格表发一次只读请求，平时零联网。
 
-Everything stays on your machine: the server binds to `127.0.0.1` only, reads local log files read-only, and makes zero outbound network requests.
+Everything stays on your machine: the server binds to `127.0.0.1` only and reads local log files read-only. The single exception is the explicit "sync latest prices" button, which makes one read-only request to the LiteLLM price table **only when you click it** — otherwise zero outbound traffic.
 
 ## 架构 / Architecture
 

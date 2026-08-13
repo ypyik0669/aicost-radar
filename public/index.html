@@ -176,13 +176,15 @@
   #cards > .w2 { grid-column: 1 / -1; }
   @media (max-width: 940px) { #cards { grid-template-columns: minmax(0, 1fr); } }
 
-  /* 卡片收起/展开 */
+  /* 卡片收起/展开:按钮在标题左侧 ☰ 旁,收起时箭头旋转 */
   .card h2 .clps {
-    background: none; border: none; color: var(--tm); cursor: pointer; flex: none;
-    font-size: 13px; line-height: 1; padding: 3px 7px; border-radius: 7px; font-family: inherit;
-    transition: background .15s, color .15s;
+    background: var(--chip); border: 1px solid var(--line); color: var(--ts); cursor: pointer; flex: none;
+    font-size: 12px; line-height: 1; padding: 3px 6px; border-radius: 7px; font-family: inherit;
+    margin-right: 2px;
+    transition: transform .2s, background .15s, color .15s, border-color .15s;
   }
-  .card h2 .clps:hover { background: var(--chip-hover); color: var(--tp); }
+  .card h2 .clps:hover { background: var(--chip-hover); color: var(--cyan); border-color: var(--line-strong); }
+  .card.min h2 .clps { transform: rotate(-90deg); }
   .card.min > :not(h2) { display: none !important; }
   .card.min h2 { margin-bottom: 0; }
 
@@ -253,6 +255,16 @@
   .app-tag.continue { color: #ee9c9c; border-color: rgba(230,103,103,.45); background: rgba(230,103,103,.08); }
   .ellip { max-width: 150px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .muted { color: var(--tm); }
+
+  /* 子代理会话:折叠在父会话行下 */
+  .subn {
+    background: rgba(144,133,233,.10); border: 1px solid rgba(144,133,233,.4); color: #aaa2ee;
+    border-radius: 7px; font-size: 10px; padding: 2px 7px; cursor: pointer; margin-left: 6px;
+    font-family: inherit; white-space: nowrap; transition: background .15s;
+  }
+  .subn:hover { background: rgba(144,133,233,.22); }
+  .sess tr.subrow td { opacity: .72; }
+  .sess tr.subrow .subind { color: var(--tm); margin-right: 4px; }
 
   #tip {
     position: fixed; pointer-events: none; display: none; z-index: 50;
@@ -427,10 +439,13 @@
   .tool.tracked .ts2 { color: var(--cyan); }
   .tool .tk { font-size: 10.5px; color: var(--tm); margin-top: 2px; line-height: 1.45; }
 
-  /* 90天视图(与小时热力图共用一张卡) */
-  .contrib { display: flex; gap: 4px; padding: 4px 0; }
-  .contrib .col { display: flex; flex-direction: column; gap: 4px; }
-  .contrib .cell { width: 18px; height: 18px; border-radius: 4px; background: var(--track); }
+  /* 90天视图(与小时热力图共用一张卡):弹性列铺满卡宽,格子随之放大 */
+  .contrib { display: flex; gap: 5px; padding: 4px 0; }
+  .contrib .col { flex: 1 1 0; min-width: 0; display: flex; flex-direction: column; gap: 5px; }
+  .contrib .mlab { font-size: 10px; color: var(--tm); height: 15px; line-height: 15px; white-space: nowrap; }
+  .contrib .cell { width: 100%; aspect-ratio: 1 / 1; border-radius: 5px; background: var(--track); }
+  .clegend { display: flex; align-items: center; gap: 4px; justify-content: flex-end; margin-top: 8px; font-size: 10px; color: var(--tm); }
+  .clegend i { width: 12px; height: 12px; border-radius: 3px; display: inline-block; }
 
   /* 卡片拖拽排序 */
   .dragh { cursor: grab; color: var(--tm); font-size: 13px; margin-right: 3px; user-select: none; }
@@ -504,7 +519,13 @@
 <main id="cards">
 
 <div class="card" id="chartCard">
-  <h2>📊 每日成本 · 按模型 <span class="hint">悬停查看明细</span></h2>
+  <h2>📊 成本 · 按模型 <span class="hint">悬停查看明细</span>
+    <div class="seg mini" id="granSeg">
+      <button data-v="day" class="on">日</button>
+      <button data-v="week">周</button>
+      <button data-v="month">月</button>
+    </div>
+  </h2>
   <svg id="chart" width="100%" height="200"></svg>
   <div class="legend" id="legend"></div>
 </div>
@@ -517,7 +538,7 @@
     </div>
   </h2>
   <div style="overflow-x:auto" id="heatWrapH"><table class="heat" id="heat"></table></div>
-  <div style="overflow-x:auto;display:none" id="heatWrapD"><div class="contrib" id="contrib"></div></div>
+  <div style="display:none" id="heatWrapD"><div class="contrib" id="contrib"></div><div class="clegend" id="clegend"></div></div>
 </div>
 
 <div class="card" id="cacheCard">
@@ -538,6 +559,16 @@
     </div>
     <div class="cmetrics" id="cacheMetrics"></div>
   </div>
+</div>
+
+<div class="card" id="blockCard">
+  <h2>⏱️ 5 小时计费窗口 <span class="hint" id="blockHint">订阅限额按 5 小时滚动窗口重置</span></h2>
+  <div id="blockList"></div>
+</div>
+
+<div class="card" id="errCard">
+  <h2>🧯 错误分析 <span class="hint" id="errHint"></span></h2>
+  <div class="diag" id="errList"></div>
 </div>
 
 <div class="duo" id="duoA">
@@ -661,10 +692,12 @@
       </table>
       <div class="mbtns">
         <button class="btn" id="pAdd">＋ 添加条目</button>
+        <button class="btn" id="pSync" title="从 LiteLLM 官方价格表拉取一次并填入表格，不会自动保存。这是整个面板唯一的可选联网操作。">🔄 同步最新价格</button>
         <button class="btn primary" id="pSave">保存</button>
         <button class="btn" onclick="modal.classList.remove('open')">取消</button>
         <span id="pmsg"></span>
       </div>
+      <div class="fnote">「同步最新价格」会向 LiteLLM 官方价格表发一次请求（整个面板唯一的联网点，点了才发），把能按名字匹配上的条目填成官方价并用黄框标出，<b>检查后点保存才生效</b>。</div>
     </div>
   </div>
 </div>
@@ -684,7 +717,7 @@ const FINE = matchMedia('(pointer:fine)').matches;
 const DEFAULT_PREFS = {
   currency: 'USD', rate: 7.25, coffeePrice: 2.5, refreshS: 30, nick: '',
   budgetMonth: 0, budgetDay: 0,
-  cardOrder: [], hiddenCards: [], collapsed: [], heatView: 'hour',
+  cardOrder: [], hiddenCards: [], collapsed: [], heatView: 'hour', chartGran: 'day',
   records: { maxDayCost: 0, maxStreak: 0 }, unlockedAch: [], celebrated: {},
 };
 let prefs = { ...DEFAULT_PREFS };
@@ -834,6 +867,8 @@ function render() {
   })));
   renderCache();
   renderFun();
+  renderBlocks();
+  renderErrors();
   renderSubs();
   renderDiag();
   renderTools();
@@ -1080,7 +1115,29 @@ function renderBars(id, rows) {
     </div>`).join('') || '<div class="muted">该范围内无数据</div>';
 }
 
+// 日粒度聚成周(周一为界)或自然月,长范围下图更可读
+function groupDaily(daily, gran) {
+  if (gran !== 'week' && gran !== 'month') return daily;
+  const out = new Map();
+  for (const d of daily) {
+    let key;
+    if (gran === 'week') {
+      const dt = new Date(d.date + 'T00:00:00');
+      key = dstr(new Date(dt.getTime() - ((dt.getDay() + 6) % 7) * 86400000));
+    } else key = d.date.slice(0, 7);
+    if (!out.has(key)) out.set(key, { date: key, byModel: {} });
+    const t = out.get(key).byModel;
+    for (const [m, u] of Object.entries(d.byModel)) {
+      if (!t[m]) t[m] = { in: 0, cw: 0, cr: 0, out: 0, cost: 0 };
+      for (const f in u) t[m][f] = (t[m][f] || 0) + u[f];
+    }
+  }
+  return [...out.values()].sort((a, b) => a.date < b.date ? -1 : 1);
+}
 function renderChart(daily) {
+  const gran = ['week', 'month'].includes(prefs.chartGran) ? prefs.chartGran : 'day';
+  for (const b of $('granSeg').querySelectorAll('button')) b.classList.toggle('on', b.dataset.v === gran);
+  daily = groupDaily(daily, gran);
   const svg = $('chart');
   const W = svg.clientWidth || 700, H = 200, padL = 46, padB = 20, padT = 8;
   svg.setAttribute('viewBox', `0 0 ${W} ${H}`);
@@ -1122,7 +1179,7 @@ function renderChart(daily) {
     });
     if (daily.length <= 10 || i % Math.ceil(daily.length / 8) === 0) {
       const t = el('text', { x: x + bw / 2, y: H - 5, 'text-anchor': 'middle', fill: css('--tm'), 'font-size': 10 });
-      t.textContent = d.date.slice(5).replace('-', '/');
+      t.textContent = gran === 'month' ? (+d.date.slice(5)) + '月' : d.date.slice(5).replace('-', '/');
       svg.appendChild(t);
     }
     const hit = el('rect', { x: padL + step * i, y: padT, width: step, height: plotH, fill: 'transparent' });
@@ -1130,7 +1187,8 @@ function renderChart(daily) {
       const rows = ordered.filter(([, u]) => u.cost > 0.0001).reverse()
         .map(([m, u]) => `<div class="r"><span><i style="background:${colorOf(m)}"></i>${esc(m)}</span><b>${fmtCost(u.cost)}</b></div>`).join('');
       const total = ordered.reduce((a, [, u]) => a + u.cost, 0);
-      showTip(ev, `<div class="t">${d.date} · ${fmtCost(total)}</div>${rows || '<div class="r muted">无用量</div>'}`);
+      const label = gran === 'week' ? d.date + ' 起的一周' : gran === 'month' ? d.date + ' 全月' : d.date;
+      showTip(ev, `<div class="t">${label} · ${fmtCost(total)}</div>${rows || '<div class="r muted">无用量</div>'}`);
     });
     hit.addEventListener('mouseleave', hideTip);
     svg.appendChild(hit);
@@ -1194,6 +1252,12 @@ $('heatSeg').addEventListener('click', e => {
   prefs.heatView = b.dataset.v; savePrefs();
   if (DATA) renderHeat();
 });
+$('granSeg').addEventListener('click', e => {
+  const b = e.target.closest('button');
+  if (!b) return;
+  prefs.chartGran = b.dataset.v; savePrefs();
+  if (DATA) render();
+});
 $('heat').addEventListener('mousemove', ev => {
   const td = ev.target.closest('td[data-v]');
   if (!td) return hideTip();
@@ -1245,22 +1309,70 @@ function renderFun() {
     { fl: '👑 最贵会话', fv: s.maxSession ? fmtCost(s.maxSession.cost) : '–', fs: s.maxSession ? esc(s.maxSession.title.slice(0, 26)) : '' },
     { fl: '🦉 夜猫指数', fv: night + '%', fs: owl + '（0-6点占比）' },
     { fl: '✍️ 累计输入', fv: s.promptTotal + ' 条', fs: '外加 ' + s.cmdTotal + ' 条命令' },
-    (() => { const w = last5h(); return { fl: '⏱️ 近5小时', fv: fmtCost(w.sum), fs: w.label + ' 起 · 订阅限额窗口参考' }; })(),
+    { fl: '🧊 缓存省下', fv: fmtCost(s.savedByCache), fs: '若无缓存要多花这么多' },
   ].map(f => `<div class="funit"><div class="fl">${f.fl}</div><div class="fv">${f.fv}</div><div class="fs">${f.fs}</div></div>`).join('');
 }
-// 滚动 5 小时窗口成本(ccgauge 式,粗粒度按小时)
-function last5h() {
-  const now = new Date();
-  let sum = 0;
-  for (let i = 0; i < 5; i++) {
-    const d = new Date(now.getTime() - i * 3600000);
-    const arr = DATA.hourly[dstr(d)];
-    if (arr) sum += arr[d.getHours()] || 0;
+
+/* ---------- 5 小时计费窗口(ccusage 同款分窗算法,服务端算好) ---------- */
+function renderBlocks() {
+  const bl = DATA.blocks || {};
+  const now = DATA.generatedAt || Date.now();
+  const LEN = 5 * 3600000;
+  const rows = [];
+  for (const [app, list] of Object.entries(bl)) {
+    if (!list.length || !appOK(app)) continue;
+    const cur = list[list.length - 1];
+    const hist = (ACH && ACH.blocks && ACH.blocks[app]) || list;
+    rows.push({
+      app, cur, active: now >= cur.start && now < cur.end,
+      maxTok: Math.max(1, ...hist.map(b => b.tok)), nHist: hist.length,
+    });
   }
-  const st = new Date(now.getTime() - 4 * 3600000);
-  return { sum, label: String(st.getHours()).padStart(2, '0') + ':00' };
+  if (!rows.length) { $('blockList').innerHTML = '<div class="muted">当前范围内没有活动窗口</div>'; return; }
+  rows.sort((a, b) => (b.active - a.active) || b.cur.last - a.cur.last);
+  const hm = ts => { const d = new Date(ts); return String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0'); };
+  $('blockList').innerHTML = rows.slice(0, 4).map(r => {
+    const c = r.cur;
+    const elapsed = Math.min(LEN, Math.max(0, now - c.start));
+    const tokPct = Math.min(100, c.tok / r.maxTok * 100);
+    let proj = null, over = false;
+    if (r.active && elapsed > 5 * 60000) {
+      proj = c.tok / elapsed * LEN;
+      over = proj > r.maxTok * 1.02;
+    }
+    return `
+    <div class="subrow${r.active && !over ? ' win' : ''}">
+      <div class="sl"><span class="app-tag ${r.app}">${esc(appName(r.app))}</span>
+        <b>${r.active ? `窗口进行中 · ${hm(c.start)} 起 · ${hm(c.end)} 重置` : `上一窗口 ${hm(c.start)}–${hm(c.end)}`}</b>
+        <span class="sright">${fmtTok(c.tok)} · ${fmtCost(c.cost)}</span></div>
+      ${r.active ? `<div class="sbt"><div class="sbf" style="width:${(elapsed / LEN * 100).toFixed(1)}%"></div></div>` : ''}
+      <div class="sn">对比 90 天峰值窗口 ${fmtTok(r.maxTok)}:已用 ${tokPct.toFixed(0)}%${
+        proj !== null ? ` · 照此速度本窗口约 ${fmtTok(proj)}${over ? ' <b class="bad">→ 将破峰值,留意限额</b>' : ''}` : ''}</div>
+    </div>`;
+  }).join('');
 }
 
+/* ---------- 错误分析(sniffly 式;只有 Claude Code 日志带工具结果) ---------- */
+const ERR_ICONS = { '用户拒绝/中断': '✋', '编辑串不匹配': '✂️', '文件/内容未找到': '🔍', '权限被拒': '🔒', '超时': '⌛', '命令失败': '💥', '其他': '❓' };
+function renderErrors() {
+  const er = DATA.errors;
+  if (!er || !er.total) {
+    $('errHint').textContent = '';
+    $('errList').innerHTML = `<div class="dgok">✓ ${days} 天内 Claude Code 没有工具报错</div>`;
+    return;
+  }
+  const rate = er.msgs ? (er.total / er.msgs * 100).toFixed(1) : null;
+  $('errHint').textContent = `${days} 天 Claude Code 工具报错 ${er.total} 次${rate ? ` · 每百条消息 ${rate} 次` : ''}`;
+  const max = Math.max(1, ...er.types.map(t => t.n));
+  $('errList').innerHTML = er.types.map(t => `
+    <div class="dg">
+      <div class="dh">${ERR_ICONS[t.type] || '❓'} ${esc(t.type)}<span class="dsave">${t.n} 次</span></div>
+      <div class="dd">
+        <div style="height:5px;border-radius:3px;overflow:hidden;background:var(--track);margin:4px 0 6px"><div style="height:100%;width:${(t.n / max * 100).toFixed(1)}%;background:var(--grad)"></div></div>
+        ${t.samples.slice(0, 2).map(s => `<div style="margin-top:3px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${esc(s)}">· ${esc(s)}</div>`).join('')}
+      </div>
+    </div>`).join('');
+}
 /* ---------- 跨工具历史搜索 ---------- */
 let sTimer = null, sLast = '';
 function hlEsc(text, q) {
@@ -1471,27 +1583,60 @@ function renderTools() {
     </div>`).join('');
 }
 
-function renderSessions(sessions) {
-  $('sessBody').innerHTML = sessions.slice(0, 150).map((s, i) => {
-    const dir = s.cwd ? s.cwd.split(/[\\/]/).filter(Boolean).pop() : '–';
-    const cls = s.agent ? 'agent' : s.app;
-    const src = s.agent ? '子代理' : appName(s.app);
-    return `<tr data-i="${i}">
-      <td><span class="dot${s.active ? ' live' : ''}"></span></td>
-      <td class="muted" style="white-space:nowrap">${fmtTime(s.end)}</td>
-      <td><span class="app-tag ${cls}">${src}</span></td>
-      <td class="ellip" style="max-width:120px" title="${esc(s.models.join(', '))}">${esc(s.models.map(m => m.replace('claude-','')).join(', ')) || '–'}</td>
-      <td class="ellip" style="max-width:100px" title="${esc(s.cwd || '')}">${esc(dir)}</td>
-      <td class="ellip" title="${esc(s.title)}">${esc(s.title)}</td>
-      <td class="num">${s.promptCount}</td>
-      <td class="num">${s.cmdCount}</td>
-      <td class="num">${fmtTok(tokSum(s.u))}</td>
-      <td class="num">${fmtCost(s.u.cost)}</td>
-    </tr>`;
-  }).join('') || '<tr><td colspan="10" class="muted">无会话</td></tr>';
-  [...$('sessBody').querySelectorAll('tr[data-i]')].forEach(r =>
-    r.addEventListener('click', () => openDrawer(sessions[+r.dataset.i])));
+let SESS_FLAT = []; // 会话表当前渲染顺序(含子代理行),给委托点击用
+function sessRowHtml(s, i, extra, child) {
+  const dir = s.cwd ? s.cwd.split(/[\\/]/).filter(Boolean).pop() : '–';
+  const cls = s.agent ? 'agent' : s.app;
+  const src = s.agent ? '子代理' : appName(s.app);
+  return `<tr data-i="${i}"${child ? ` class="subrow" data-p="${esc(child)}" style="display:none"` : ''}>
+    <td><span class="dot${s.active ? ' live' : ''}"></span></td>
+    <td class="muted" style="white-space:nowrap">${fmtTime(s.end)}</td>
+    <td style="white-space:nowrap">${child ? '<span class="subind">↳</span>' : ''}<span class="app-tag ${cls}">${src}</span>${extra || ''}</td>
+    <td class="ellip" style="max-width:120px" title="${esc(s.models.join(', '))}">${esc(s.models.map(m => m.replace('claude-','')).join(', ')) || '–'}</td>
+    <td class="ellip" style="max-width:100px" title="${esc(s.cwd || '')}">${esc(dir)}</td>
+    <td class="ellip" title="${esc(s.title)}">${esc(s.title)}</td>
+    <td class="num">${s.promptCount}</td>
+    <td class="num">${s.cmdCount}</td>
+    <td class="num">${fmtTok(tokSum(s.u))}</td>
+    <td class="num">${fmtCost(s.u.cost)}</td>
+  </tr>`;
 }
+function renderSessions(sessions) {
+  // 子代理会话挂到父会话行下,默认收起;找不到父会话的仍留在顶层
+  const topIds = new Set(sessions.filter(s => !s.agent).map(s => s.app + ':' + s.id));
+  const kids = new Map();
+  const top = [];
+  for (const s of sessions) {
+    const pk = s.app + ':' + s.parent;
+    if (s.agent && s.parent && topIds.has(pk)) {
+      if (!kids.has(pk)) kids.set(pk, []);
+      kids.get(pk).push(s);
+    } else top.push(s);
+  }
+  SESS_FLAT = [];
+  let html = '';
+  for (const s of top.slice(0, 150)) {
+    const k = s.app + ':' + s.id;
+    const ch = kids.get(k) || [];
+    const badge = ch.length
+      ? `<button class="subn" data-k="${esc(k)}" data-n="${ch.length}">▸ ${ch.length} 子代理</button>` : '';
+    html += sessRowHtml(s, SESS_FLAT.length, badge, null);
+    SESS_FLAT.push(s);
+    for (const c of ch) { html += sessRowHtml(c, SESS_FLAT.length, '', k); SESS_FLAT.push(c); }
+  }
+  $('sessBody').innerHTML = html || '<tr><td colspan="10" class="muted">无会话</td></tr>';
+}
+$('sessBody').addEventListener('click', e => {
+  const b = e.target.closest('.subn');
+  if (b) {
+    const open = b.classList.toggle('open');
+    b.textContent = `${open ? '▾' : '▸'} ${b.dataset.n} 子代理`;
+    for (const tr of $('sessBody').querySelectorAll(`tr[data-p="${b.dataset.k}"]`)) tr.style.display = open ? '' : 'none';
+    return;
+  }
+  const r = e.target.closest('tr[data-i]');
+  if (r && SESS_FLAT[+r.dataset.i]) openDrawer(SESS_FLAT[+r.dataset.i]);
+});
 
 async function openDrawer(s) {
   drawer.classList.add('open');
@@ -1697,21 +1842,27 @@ function renderContrib() {
   const start = new Date(today.getTime() - 89 * 86400000);
   start.setDate(start.getDate() - (start.getDay() + 6) % 7);
   let html = '';
+  let prevMonth = -1;
   for (let w = 0; ; w++) {
-    let col = '';
-    let colHas = false;
+    const first = new Date(start.getTime() + w * 7 * 86400000);
+    if (first > today) break;
+    // 列顶月份标签:该周进入新月份时标出
+    const mlab = first.getMonth() !== prevMonth ? (first.getMonth() + 1) + '月' : '';
+    prevMonth = first.getMonth();
+    let col = `<div class="mlab">${mlab}</div>`;
     for (let dow = 0; dow < 7; dow++) {
-      const d = new Date(start.getTime() + (w * 7 + dow) * 86400000);
+      const d = new Date(first.getTime() + dow * 86400000);
       if (d > today) { col += `<div class="cell" style="visibility:hidden"></div>`; continue; }
-      colHas = true;
       const ds = dstr(d), v = byDate.get(ds) || 0;
       col += `<div class="cell" style="background:${contribColor(v, max)}" data-d="${ds}" data-v="${v.toFixed(2)}"></div>`;
     }
-    if (!colHas) break;
     html += `<div class="col">${col}</div>`;
     if (w > 20) break;
   }
   $('contrib').innerHTML = html;
+  $('clegend').innerHTML = '少 ' +
+    [0, .25, .5, .75, 1].map(t => `<i style="background:${t ? contribColor(t * t * max, max) : 'var(--track)'}"></i>`).join('') +
+    ' 多 · 单格 = 当日成本';
 }
 $('contrib').addEventListener('mousemove', ev => {
   const c = ev.target.closest('.cell[data-d]');
@@ -1742,6 +1893,7 @@ async function loadAch() {
     renderContrib();
     checkRecords();
     renderBudget();
+    if (DATA) renderBlocks(); // 90 天峰值窗口基线就绪后重画
   } catch {}
 }
 loadAch();
@@ -1813,6 +1965,7 @@ $('posterBtn').addEventListener('click', () => {
 /* ---------- 卡片排序 + 显隐 + 双列瀑布流 ---------- */
 const BLOCKS = [
   ['chartCard', '每日成本图'], ['heatCard', '活动热力图'], ['cacheCard', '缓存效率'],
+  ['blockCard', '5小时窗口'], ['errCard', '错误分析'],
   ['duoA', '模型 + 项目'], ['duoB', '命令 + 趣味'], ['subCard', '订阅回本'], ['diagCard', '省钱诊断'],
   ['toolCard', '本机 AI 工具'], ['achCard', '成就'], ['sessCard', '会话记录'],
 ];
@@ -1857,7 +2010,6 @@ function applyCollapse() {
     if (!card.id || !b) continue;
     const min = (prefs.collapsed || []).includes(card.id);
     card.classList.toggle('min', min);
-    b.textContent = min ? '＋' : '－';
     b.title = min ? '展开' : '收起';
   }
 }
@@ -1867,8 +2019,10 @@ function initCollapse() {
     if (!card.id || h2.querySelector('.clps')) continue;
     const b = document.createElement('button');
     b.className = 'clps';
-    if (!h2.querySelector('.hint') && !h2.querySelector('.seg')) b.style.marginLeft = 'auto';
-    h2.appendChild(b);
+    b.textContent = '▾';
+    // 放在拖拽把手 ☰ 之后(duo 子卡没有把手就放最前),右边太不显眼
+    const dh = h2.querySelector('.dragh');
+    h2.insertBefore(b, dh ? dh.nextSibling : h2.firstChild);
     b.addEventListener('click', e => {
       e.stopPropagation();
       const set = new Set(prefs.collapsed || []);
@@ -2109,6 +2263,29 @@ $('pAdd').addEventListener('click', () => {
 $('pBody').addEventListener('click', e => {
   const b = e.target.closest('.del');
   if (b) b.closest('tr').remove();
+});
+$('pSync').addEventListener('click', async () => {
+  $('pmsg').textContent = '正在拉取 LiteLLM 官方价格表…'; $('pmsg').style.color = 'var(--tm)';
+  try {
+    const j = await (await fetch('/api/pricing/sync', { method: 'POST' })).json();
+    if (!j.ok) throw new Error(j.error || '同步失败');
+    let n = 0;
+    for (const tr of $('pBody').querySelectorAll('tr')) {
+      const k = tr.querySelector('.pk').value.trim();
+      const p = j.proposed[k];
+      if (!p || k === 'default') continue;
+      for (const inp of tr.querySelectorAll('.pv')) {
+        const nv = p[inp.dataset.f];
+        if (nv != null && Math.abs(parseFloat(inp.value || '0') - nv) > 1e-9) {
+          inp.value = nv; inp.style.borderColor = '#fbbf24'; n++;
+        }
+      }
+    }
+    $('pmsg').textContent = n
+      ? `匹配到 ${j.matched.length} 个模型、${n} 处差异（黄框），检查后点保存生效`
+      : '本地价与官方一致，或自定义名称匹配不上官方表，未改动';
+    $('pmsg').style.color = n ? '#fbbf24' : 'var(--good)';
+  } catch (e) { $('pmsg').textContent = e.message; $('pmsg').style.color = 'var(--bad)'; }
 });
 $('pSave').addEventListener('click', async () => {
   const obj = {};

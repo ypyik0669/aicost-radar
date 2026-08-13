@@ -113,11 +113,14 @@ function extractClaudeUserEvent(content) {
 }
 
 function parseClaudeFile(fp) {
+  // 子代理转录位于 <project>/<父会话id>/subagents/agent-*.jsonl，父会话 id 就是上上级目录名
+  const inSub = path.basename(path.dirname(fp)) === 'subagents';
   const data = {
     app: 'claude', id: path.basename(fp, '.jsonl'),
     agent: path.basename(fp).startsWith('agent-'),
+    parent: inSub ? path.basename(path.dirname(path.dirname(fp))) : null,
     cwd: null, source: null, firstTs: null, lastTs: null,
-    usageEntries: [], events: [],
+    usageEntries: [], events: [], errors: [], errCount: 0,
   };
   eachLine(fp, (line) => {
     if (!line || line[0] !== '{') return;
@@ -142,6 +145,19 @@ function parseClaudeFile(fp) {
         },
       });
     } else if (e.type === 'user' && msg && msg.content && !e.isSidechain && !e.isMeta) {
+      // 工具报错(sniffly 式错误分析);子代理内部的报错记在 agent 文件里，主会话不重复计
+      if (Array.isArray(msg.content)) {
+        for (const b of msg.content) {
+          if (!b || b.type !== 'tool_result' || !b.is_error) continue;
+          data.errCount++;
+          if (data.errors.length < 200) {
+            let t = typeof b.content === 'string' ? b.content
+              : Array.isArray(b.content) ? b.content.filter(x => x && x.type === 'text').map(x => x.text).join(' ') : '';
+            t = String(t || '').replace(/\s+/g, ' ').trim();
+            if (t) data.errors.push({ ts, text: t.slice(0, 240) });
+          }
+        }
+      }
       if (data.events.length < MAX_EVENTS_PER_SESSION) {
         const ev = extractClaudeUserEvent(msg.content);
         if (ev) data.events.push({ ts, kind: ev.kind, text: ev.text });
@@ -658,6 +674,42 @@ function collectSessionData(cutoffMs) {
   return out;
 }
 
+// 工具报错分类（顺序即优先级，第一条命中即归类）
+const ERR_TYPES = [
+  ['用户拒绝/中断', /doesn't want to proceed|user rejected|interrupted|已中断/i],
+  ['编辑串不匹配', /string to replace|old_string|not unique|has been modified since read/i],
+  ['文件/内容未找到', /not found|no such file|does not exist|cannot find|ENOENT|no matches|找不到|不存在/i],
+  ['权限被拒', /permission|denied|EACCES|EPERM|not allowed|requires approval/i],
+  ['超时', /timed? ?out|ETIMEDOUT/i],
+  ['命令失败', /exit code|exited with|command failed|non-zero|fatal:|error:/i],
+];
+function classifyErr(t) {
+  for (const [name, re] of ERR_TYPES) if (re.test(t)) return name;
+  return '其他';
+}
+
+// ccusage 式 5 小时计费窗口：起点=静默期后首次活动所在整点（UTC 对齐），窗口长 5h
+function computeBlocks(entriesByApp) {
+  const HOUR = 3600000, LEN = 5 * HOUR;
+  const out = {};
+  for (const [app, list] of entriesByApp) {
+    list.sort((a, b) => a.ts - b.ts);
+    const arr = [];
+    let cur = null, lastTs = 0;
+    for (const e of list) {
+      if (!cur || e.ts >= cur.start + LEN || e.ts - lastTs >= LEN) {
+        cur = { start: Math.floor(e.ts / HOUR) * HOUR, tok: 0, cost: 0, last: e.ts };
+        arr.push(cur);
+      }
+      cur.tok += e.tok; cur.cost += e.cost; cur.last = e.ts;
+      lastTs = e.ts;
+    }
+    for (const b of arr) b.end = b.start + LEN;
+    out[app] = arr.slice(-150);
+  }
+  return out;
+}
+
 function aggregate(days) {
   const now = Date.now();
   if (aggCache.body && aggCache.days === days && now - aggCache.at < 15000) return aggCache.body;
@@ -673,13 +725,17 @@ function aggregate(days) {
   const projects = new Map();// 项目目录 -> 汇总
   const commands = new Map();// 斜杠命令 -> 次数
   const appsSeen = new Set();
+  const blockEntries = new Map(); // app -> [{ts, tok, cost}] 用于 5 小时窗口
+  const errTypes = new Map();     // 错误类型 -> {n, samples}
+  let errTotal = 0, claudeMsgs = 0;
   let nightCost = 0, promptTotal = 0, cmdTotal = 0, savedByCache = 0;
+  const rangeMs = now - days * 86400000;
 
   for (const d of collectSessionData(cutoffMs)) {
-    if (!d.lastTs || d.lastTs < now - days * 86400000) continue;
+    if (!d.lastTs || d.lastTs < rangeMs) continue;
     const app = d.app;
     const sess = {
-      app, id: d.id, agent: d.agent, cwd: d.cwd, source: d.source || null,
+      app, id: d.id, agent: d.agent, parent: d.parent || null, cwd: d.cwd, source: d.source || null,
       start: d.firstTs, end: d.lastTs,
       models: [], u: zero(), msgCount: d.usageEntries.length,
       cmdCount: d.events.filter(ev => ev.kind === 'command').length,
@@ -716,6 +772,33 @@ function aggregate(days) {
       if (hr < 6) nightCost += cost;
       const pm = priceFor(model);
       savedByCache += en.u.cr * Math.max(0, pm.input - pm.cacheRead) / 1e6;
+      if (en.ts) {
+        if (!blockEntries.has(app)) blockEntries.set(app, []);
+        blockEntries.get(app).push({ ts: en.ts, tok: en.u.in + en.u.cw + en.u.cr + en.u.out, cost });
+      }
+    }
+    if (app === 'claude') {
+      claudeMsgs += d.usageEntries.length;
+      if (d.errCount) {
+        let sampled = 0;
+        for (const er of (d.errors || [])) {
+          if (er.ts && er.ts < rangeMs) continue;
+          sampled++;
+          const ty = classifyErr(er.text);
+          if (!errTypes.has(ty)) errTypes.set(ty, { n: 0, samples: [] });
+          const t = errTypes.get(ty);
+          t.n++;
+          if (t.samples.length < 3) t.samples.push(er.text.slice(0, 170));
+        }
+        errTotal += sampled;
+        // 超出单文件采样上限(200)的部分只计数，归入「其他」
+        const overflow = d.errCount - (d.errors || []).length;
+        if (overflow > 0 && sampled > 0) {
+          errTotal += overflow;
+          if (!errTypes.has('其他')) errTypes.set('其他', { n: 0, samples: [] });
+          errTypes.get('其他').n += overflow;
+        }
+      }
     }
     sess.models = [...sessModels];
     if (sess.msgCount || sess.cmdCount || sess.promptCount) {
@@ -783,6 +866,12 @@ function aggregate(days) {
     detected: detectTools(appsSeen),
     archivedDates, // 这些天的数据来自归档（原始日志已被工具清理）
     archiveDays: Object.keys(archive).length,
+    blocks: computeBlocks(blockEntries), // app -> 5 小时计费窗口序列
+    errors: {
+      total: errTotal, msgs: claudeMsgs,
+      types: [...errTypes.entries()].map(([type, t]) => ({ type, n: t.n, samples: t.samples }))
+        .sort((a, b) => b.n - a.n),
+    },
     daily: [...daily.entries()].sort((a, b) => a[0] < b[0] ? -1 : 1)
       .map(([date, byApp]) => ({ date, byApp })),
     models: [...models.entries()].map(([model, byApp]) => {
@@ -835,7 +924,7 @@ function searchEvents(q, days, limit) {
       if (!terms.every(t => low.includes(t))) continue;
       const at = low.indexOf(terms[0]);
       hits.push({
-        app: d.app, id: d.id, cwd: d.cwd, agent: d.agent,
+        app: d.app, id: d.id, cwd: d.cwd, agent: d.agent, parent: d.parent || null,
         ts: ev.ts || d.lastTs, kind: ev.kind,
         snippet: (at > 60 ? '…' : '') + ev.text.slice(Math.max(0, at - 60), at + 180),
         sessionCost: sessCost, sessionTokens: sessTok, models: [...modelSet],
@@ -909,6 +998,48 @@ const server = http.createServer(async (req, res) => {
       PRICING = obj;
       aggCache = { at: 0, days: 0, body: null }; // 重算成本
       json(200, { ok: true });
+    } else if (u.pathname === '/api/pricing/sync' && req.method === 'POST') {
+      // 全项目唯一的可选联网点：只在用户于设置里显式点击「同步最新价格」时请求 LiteLLM 官方价格表。
+      // 只返回“建议值”，不落盘——用户在表格里确认后走原有 POST /api/pricing 保存。
+      const LITELLM_URL = 'https://raw.githubusercontent.com/BerriAI/litellm/main/model_prices_and_context_window.json';
+      let remote;
+      try {
+        const ctl = new AbortController();
+        const timer = setTimeout(() => ctl.abort(), 15000);
+        const r = await fetch(LITELLM_URL, { signal: ctl.signal });
+        clearTimeout(timer);
+        if (!r.ok) return json(502, { error: 'LiteLLM 返回 HTTP ' + r.status });
+        remote = await r.json();
+      } catch (e) {
+        return json(502, { error: '拉取失败（离线或被墙？）: ' + e.message });
+      }
+      const index = new Map();
+      for (const [k, v] of Object.entries(remote)) {
+        if (!v || typeof v !== 'object' || !v.input_cost_per_token) continue;
+        const lk = k.toLowerCase();
+        if (!index.has(lk)) index.set(lk, v);
+        const short = lk.slice(lk.lastIndexOf('/') + 1);
+        if (!index.has(short)) index.set(short, v);
+      }
+      const per1M = x => x ? +(x * 1e6).toFixed(4) : 0;
+      const proposed = {}, changes = [];
+      for (const [k, v] of Object.entries(PRICING)) {
+        proposed[k] = typeof v === 'object' ? { ...v } : v;
+        if (k.startsWith('_') || k === 'default') continue;
+        const hit = index.get(k.toLowerCase());
+        if (!hit) continue;
+        const nv = {
+          input: per1M(hit.input_cost_per_token),
+          output: per1M(hit.output_cost_per_token),
+          cacheWrite: hit.cache_creation_input_token_cost != null ? per1M(hit.cache_creation_input_token_cost) : (v.cacheWrite || 0),
+          cacheRead: hit.cache_read_input_token_cost != null ? per1M(hit.cache_read_input_token_cost) : (v.cacheRead || 0),
+        };
+        for (const f of ['input', 'output', 'cacheWrite', 'cacheRead']) {
+          if (Math.abs((v[f] || 0) - nv[f]) > 1e-9) changes.push({ key: k, field: f, from: v[f] || 0, to: nv[f] });
+        }
+        proposed[k] = nv;
+      }
+      json(200, { ok: true, matched: [...new Set(changes.map(c => c.key))], changes, proposed });
     } else if (u.pathname === '/' || u.pathname === '/index.html') {
       res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
       res.end(fs.readFileSync(path.join(__dirname, 'public', 'index.html')));
