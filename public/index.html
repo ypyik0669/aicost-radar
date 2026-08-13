@@ -1,0 +1,774 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AI 用量监控</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📟</text></svg>">
+<style>
+  :root {
+    color-scheme: dark;
+    --page: #0b0c10;
+    --glass: rgba(255,255,255,0.055);
+    --glass-2: rgba(255,255,255,0.10);
+    --surface-1: var(--glass);
+    --surface-2: rgba(255,255,255,0.07);
+    --text-primary: #f2f3f7;
+    --text-secondary: rgba(233,236,244,0.66);
+    --text-muted: rgba(233,236,244,0.42);
+    --grid: rgba(255,255,255,0.08);
+    --baseline: rgba(255,255,255,0.16);
+    --border: rgba(255,255,255,0.12);
+    --border-soft: rgba(255,255,255,0.07);
+    --accent: #0a84ff;
+    --blur: blur(28px) saturate(150%);
+    --series-1: #3987e5; --series-2: #d95926; --series-3: #199e70; --series-4: #c98500;
+    --series-5: #d55181; --series-6: #008300; --series-7: #9085e9; --series-8: #e66767;
+    --good: #30d158;
+  }
+  * { box-sizing: border-box; margin: 0; }
+  html { background: var(--page); }
+  body {
+    background: transparent; color: var(--text-primary);
+    font-family: -apple-system, "SF Pro Text", "Segoe UI Variable Text", "Segoe UI", system-ui, "Microsoft YaHei", sans-serif;
+    font-size: 13px; padding: 0 18px 24px; min-width: 500px;
+    max-width: 1560px; margin: 0 auto;
+  }
+  /* 环境光晕背景 */
+  .aurora { position: fixed; inset: 0; z-index: -1; overflow: hidden; background: radial-gradient(120% 90% at 50% 0%, #10121a 0%, #0b0c10 60%); }
+  .aurora i {
+    position: absolute; border-radius: 50%; filter: blur(100px); opacity: .38; will-change: transform;
+  }
+  .aurora i:nth-child(1) { width: 640px; height: 640px; background: #3d5bd9; top: -18%; left: -8%; animation: drift1 44s ease-in-out infinite alternate; }
+  .aurora i:nth-child(2) { width: 540px; height: 540px; background: #0e7f76; top: 26%; right: -12%; animation: drift2 52s ease-in-out infinite alternate; }
+  .aurora i:nth-child(3) { width: 580px; height: 580px; background: #6b3fa8; bottom: -22%; left: 28%; animation: drift3 60s ease-in-out infinite alternate; }
+  @keyframes drift1 { to { transform: translate(70px, 50px) scale(1.08); } }
+  @keyframes drift2 { to { transform: translate(-60px, -45px) scale(1.05); } }
+  @keyframes drift3 { to { transform: translate(50px, -60px) scale(1.1); } }
+  @media (prefers-reduced-motion: reduce) { .aurora i { animation: none; } .dot.live { animation: none; } }
+  ::-webkit-scrollbar { width: 8px; height: 8px; }
+  ::-webkit-scrollbar-thumb { background: rgba(255,255,255,.18); border-radius: 4px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+
+  header {
+    display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+    position: sticky; top: 0; z-index: 30;
+    background: rgba(11,12,16,.55); backdrop-filter: var(--blur); -webkit-backdrop-filter: var(--blur);
+    padding: 16px 4px 14px; border-bottom: 1px solid var(--border-soft); margin: 0 -18px 16px; padding-left: 22px; padding-right: 22px;
+  }
+  header .hi { margin-right: auto; }
+  header h1 { font-size: 17px; font-weight: 650; letter-spacing: -.2px; }
+  header .sub { color: var(--text-muted); font-size: 11.5px; margin-top: 3px; }
+  .ring { width: 28px; height: 28px; cursor: pointer; flex: none; }
+  .ring circle { fill: none; stroke-width: 2.5; }
+  .ring .bg { stroke: var(--grid); }
+  .ring .fg { stroke: var(--accent); stroke-linecap: round; transition: stroke-dashoffset 1s linear; }
+  .ring text { fill: var(--text-muted); font-size: 9px; text-anchor: middle; dominant-baseline: central; }
+  .seg {
+    display: flex; gap: 2px; border: 1px solid var(--border-soft); border-radius: 999px; padding: 3px; flex: none;
+    background: rgba(255,255,255,.05); backdrop-filter: var(--blur); -webkit-backdrop-filter: var(--blur);
+  }
+  .seg button {
+    background: none; border: none; color: var(--text-secondary); padding: 5px 13px;
+    cursor: pointer; font-size: 12px; font-family: inherit; border-radius: 999px;
+    transition: background .18s, color .18s;
+  }
+  .seg button:hover { background: rgba(255,255,255,.10); color: var(--text-primary); }
+  .seg button.on { background: var(--accent); color: #fff; font-weight: 600; box-shadow: 0 2px 8px rgba(10,132,255,.4); }
+
+  .tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px; margin-bottom: 12px; }
+  .tile {
+    background: var(--glass); border: 1px solid var(--border-soft); border-radius: 20px;
+    padding: 15px 17px;
+    backdrop-filter: var(--blur); -webkit-backdrop-filter: var(--blur);
+    box-shadow: inset 0 1px 0 rgba(255,255,255,.09), 0 8px 24px rgba(0,0,0,.3);
+    transition: border-color .2s, transform .2s;
+  }
+  .tile:hover { border-color: rgba(255,255,255,.18); transform: translateY(-1px); }
+  .tile .lab { color: var(--text-muted); font-size: 11px; margin-bottom: 7px; letter-spacing: .3px; }
+  .tile .val { font-size: 26px; font-weight: 650; letter-spacing: -.6px; font-family: -apple-system, "SF Pro Display", "Segoe UI Variable Display", "Segoe UI", system-ui, sans-serif; }
+  .tile.hero .val {
+    font-size: 34px;
+    background: linear-gradient(180deg, #ffffff 20%, rgba(255,255,255,.55));
+    -webkit-background-clip: text; background-clip: text; color: transparent;
+  }
+  .tile .sub { color: var(--text-secondary); font-size: 11px; margin-top: 5px; }
+
+  .card {
+    background: var(--glass); border: 1px solid var(--border-soft); border-radius: 22px;
+    padding: 16px 18px; margin-bottom: 12px; overflow-x: auto;
+    backdrop-filter: var(--blur); -webkit-backdrop-filter: var(--blur);
+    box-shadow: inset 0 1px 0 rgba(255,255,255,.09), 0 8px 24px rgba(0,0,0,.3);
+    transition: border-color .2s;
+  }
+  .card:hover { border-color: rgba(255,255,255,.15); }
+  .card h2 { font-size: 12px; font-weight: 600; color: var(--text-secondary); margin-bottom: 12px; display: flex; align-items: center; gap: 6px; letter-spacing: .3px; }
+  .card h2 .hint { color: var(--text-muted); font-weight: 400; font-size: 11px; margin-left: auto; }
+  .duo { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 12px; }
+  .duo .card { margin-bottom: 0; }
+  @media (max-width: 660px) { .duo { grid-template-columns: 1fr; } }
+
+  .legend { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 8px; }
+  .legend span { display: inline-flex; align-items: center; gap: 5px; color: var(--text-secondary); font-size: 11px; }
+  .legend i, .swatch { width: 9px; height: 9px; border-radius: 2.5px; display: inline-block; flex: none; }
+
+  .mrow { display: grid; grid-template-columns: minmax(90px, 150px) 1fr 58px 56px; gap: 8px; align-items: center; padding: 4px 0; }
+  .mrow .name { font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; display: flex; align-items: center; gap: 6px; }
+  .mrow .track { height: 9px; background: var(--grid); border-radius: 4px; overflow: hidden; }
+  .mrow .fill { height: 100%; border-radius: 4px; transition: width .5s ease; }
+  .mrow .num { text-align: right; font-variant-numeric: tabular-nums; color: var(--text-secondary); font-size: 12px; white-space: nowrap; }
+
+  .heat { border-spacing: 2px; border-collapse: separate; }
+  .heat td { width: 22px; height: 15px; border-radius: 3px; background: var(--grid); }
+  .heat .rl { color: var(--text-muted); font-size: 10px; padding-right: 6px; background: none; white-space: nowrap; width: auto; }
+  .heat .cl { color: var(--text-muted); font-size: 9px; text-align: center; background: none; height: auto; }
+
+  /* 缓存命中率 Halo 仪表 */
+  .cachecard { display: flex; align-items: center; gap: 30px; flex-wrap: wrap; padding: 4px 2px; }
+  .halo { position: relative; width: 150px; height: 150px; flex: none; }
+  .halo svg { width: 100%; height: 100%; transform: rotate(-90deg); }
+  .halo .arc { fill: none; stroke: url(#haloGrad); stroke-width: 10; stroke-linecap: round; transition: stroke-dashoffset .9s cubic-bezier(.3,.7,.3,1); }
+  .halo .arcGlow { fill: none; stroke: url(#haloGrad); stroke-width: 10; stroke-linecap: round; filter: blur(7px); opacity: .55; transition: stroke-dashoffset .9s cubic-bezier(.3,.7,.3,1); }
+  .halo .trk { fill: none; stroke: rgba(255,255,255,.07); stroke-width: 10; }
+  .halo .ct { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+  .halo .pct {
+    font-size: 30px; font-weight: 700; letter-spacing: -.8px;
+    font-family: -apple-system, "SF Pro Display", "Segoe UI Variable Display", "Segoe UI", system-ui, sans-serif;
+    background: linear-gradient(135deg, #7ee7d0, #6fb6ff);
+    -webkit-background-clip: text; background-clip: text; color: transparent;
+  }
+  .halo .pl { font-size: 10.5px; color: var(--text-muted); margin-top: 2px; }
+  .cmetrics { display: flex; gap: 30px; flex-wrap: wrap; flex: 1; min-width: 260px; }
+  .cm { min-width: 130px; }
+  .cm .cl { font-size: 11px; color: var(--text-muted); margin-bottom: 6px; }
+  .cm .cv { font-size: 19px; font-weight: 650; letter-spacing: -.3px; }
+  .cm .bar { margin-top: 8px; height: 5px; border-radius: 3px; background: rgba(255,255,255,.08); overflow: hidden; max-width: 150px; }
+  .cm .bar div { height: 100%; border-radius: 3px; background: linear-gradient(90deg, #2dd4bf, #0a84ff); transition: width .9s cubic-bezier(.3,.7,.3,1); }
+  .cm .cs { font-size: 10.5px; color: var(--text-secondary); margin-top: 5px; }
+
+  .fun { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 8px; }
+  .funit { background: rgba(255,255,255,.05); border: 1px solid var(--border-soft); border-radius: 14px; padding: 10px 12px; }
+  .funit .fl { font-size: 11px; color: var(--text-muted); }
+  .funit .fv { font-size: 16px; font-weight: 650; letter-spacing: -.3px; margin-top: 4px; }
+  .funit .fs { font-size: 10.5px; color: var(--text-secondary); margin-top: 3px; }
+
+  table.sess { width: 100%; border-collapse: collapse; font-size: 12px; }
+  .sess th { text-align: left; color: var(--text-muted); font-weight: 500; font-size: 11px; padding: 5px 7px; border-bottom: 1px solid var(--baseline); white-space: nowrap; }
+  .sess td { padding: 8px 7px; border-bottom: 1px solid rgba(255,255,255,.055); vertical-align: middle; }
+  .sess td.num, .sess th.num { text-align: right; font-variant-numeric: tabular-nums; }
+  .sess tbody tr { cursor: pointer; transition: background .12s; }
+  .sess tbody tr:hover { background: rgba(255,255,255,.055); }
+  .dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--baseline); }
+  .dot.live { background: var(--good); animation: pulse 1.6s ease-out infinite; }
+  @keyframes pulse { 0% { box-shadow: 0 0 0 0 rgba(48,209,88,.55); } 100% { box-shadow: 0 0 0 7px rgba(48,209,88,0); } }
+  .app-tag { font-size: 10px; padding: 2px 7px; border-radius: 9px; border: 1px solid var(--border); color: var(--text-secondary); white-space: nowrap; }
+  .app-tag.claude { border-color: rgba(57,135,229,.45); color: #7db2ef; }
+  .app-tag.agent  { border-color: rgba(144,133,233,.45); color: #aaa2ee; }
+  .app-tag.codex  { border-color: rgba(25,158,112,.45); color: #4dc397; }
+  .app-tag.gemini { border-color: rgba(201,133,0,.5);  color: #e0b25c; }
+  .app-tag.opencode { border-color: rgba(213,81,129,.5); color: #e58bad; }
+  .app-tag.continue { border-color: rgba(230,103,103,.5); color: #ee9c9c; }
+
+  /* 定价编辑器 */
+  .gear {
+    background: rgba(255,255,255,.05); border: 1px solid var(--border-soft); border-radius: 999px;
+    width: 34px; height: 34px; color: var(--text-secondary); cursor: pointer; font-size: 15px; flex: none;
+    backdrop-filter: var(--blur); -webkit-backdrop-filter: var(--blur); transition: background .18s, color .18s;
+  }
+  .gear:hover { background: rgba(255,255,255,.12); color: var(--text-primary); }
+  #modal {
+    position: fixed; inset: 0; z-index: 60; display: none; align-items: center; justify-content: center;
+    background: rgba(0,0,0,.45); backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px);
+  }
+  #modal.open { display: flex; }
+  .mbox {
+    width: 660px; max-width: 94vw; max-height: 86vh; overflow-y: auto;
+    background: rgba(20,22,30,.82); border: 1px solid var(--border); border-radius: 22px; padding: 20px;
+    backdrop-filter: blur(40px) saturate(160%); -webkit-backdrop-filter: blur(40px) saturate(160%);
+    box-shadow: inset 0 1px 0 rgba(255,255,255,.09), 0 24px 60px rgba(0,0,0,.6);
+  }
+  .mbox h3 { font-size: 15px; font-weight: 650; letter-spacing: -.2px; margin-bottom: 5px; }
+  .mbox .mnote { color: var(--text-muted); font-size: 11px; margin-bottom: 12px; line-height: 1.55; }
+  table.ptab { width: 100%; border-collapse: collapse; font-size: 12px; }
+  .ptab th { text-align: left; color: var(--text-muted); font-weight: 500; font-size: 10.5px; padding: 4px 6px 6px 2px; border-bottom: 1px solid var(--baseline); }
+  .ptab td { padding: 4px 6px 4px 0; }
+  .ptab input {
+    width: 100%; background: rgba(255,255,255,.06); border: 1px solid var(--border-soft); border-radius: 8px;
+    color: var(--text-primary); padding: 6px 8px; font-size: 12px; font-family: Consolas, monospace; outline: none;
+  }
+  .ptab input:focus { border-color: var(--accent); }
+  .ptab input:disabled { opacity: .55; }
+  .ptab .del { background: none; border: none; color: var(--text-muted); cursor: pointer; font-size: 13px; }
+  .ptab .del:hover { color: #ff6b6b; }
+  .mbtns { display: flex; gap: 8px; margin-top: 14px; align-items: center; }
+  .btn {
+    border-radius: 999px; padding: 7px 16px; font-size: 12px; cursor: pointer; font-family: inherit;
+    border: 1px solid var(--border-soft); background: rgba(255,255,255,.06); color: var(--text-primary);
+    transition: background .18s;
+  }
+  .btn:hover { background: rgba(255,255,255,.12); }
+  .btn.primary { background: var(--accent); border-color: transparent; font-weight: 600; color: #fff; box-shadow: 0 2px 8px rgba(10,132,255,.4); }
+  #pmsg { font-size: 11px; margin-left: auto; }
+  .ellip { max-width: 150px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .muted { color: var(--text-muted); }
+
+  #tip {
+    position: fixed; pointer-events: none; display: none; z-index: 50;
+    background: rgba(28,30,38,.72); border: 1px solid var(--border); border-radius: 14px;
+    backdrop-filter: var(--blur); -webkit-backdrop-filter: var(--blur);
+    padding: 9px 11px; font-size: 11px; max-width: 270px;
+    box-shadow: inset 0 1px 0 rgba(255,255,255,.1), 0 8px 22px rgba(0,0,0,.55);
+  }
+  #tip .t { color: var(--text-primary); font-weight: 600; margin-bottom: 4px; }
+  #tip .r { display: flex; justify-content: space-between; gap: 14px; color: var(--text-secondary); padding: 1.5px 0; }
+  #tip .r i { width: 8px; height: 8px; border-radius: 2px; display: inline-block; margin-right: 5px; }
+
+  #drawer {
+    position: fixed; top: 0; right: -540px; width: 520px; max-width: 92vw; height: 100vh; z-index: 40;
+    background: rgba(16,18,24,.72); border-left: 1px solid var(--border); border-radius: 22px 0 0 22px;
+    backdrop-filter: blur(40px) saturate(160%); -webkit-backdrop-filter: blur(40px) saturate(160%);
+    transition: right .2s ease; padding: 18px; overflow-y: auto;
+    box-shadow: inset 0 1px 0 rgba(255,255,255,.08), -12px 0 40px rgba(0,0,0,.5);
+  }
+  #drawer.open { right: 0; }
+  #drawer .close { float: right; background: none; border: none; color: var(--text-muted); font-size: 18px; cursor: pointer; }
+  #drawer h3 { font-size: 15px; font-weight: 650; letter-spacing: -.2px; margin-bottom: 6px; }
+  #drawer .meta { color: var(--text-muted); font-size: 11px; margin-bottom: 12px; word-break: break-all; line-height: 1.5; }
+  .tokbar { display: flex; height: 8px; border-radius: 4px; overflow: hidden; margin: 8px 0 12px; background: var(--grid); }
+  .tokbar div { height: 100%; }
+  .ev { border-left: 2px solid var(--baseline); padding: 4px 0 4px 10px; margin-bottom: 7px; }
+  .ev.command { border-left-color: var(--series-4); }
+  .ev .ts { color: var(--text-muted); font-size: 10px; }
+  .ev .tx { color: var(--text-secondary); font-size: 12px; white-space: pre-wrap; word-break: break-word; line-height: 1.45; }
+  .ev.command .tx { color: var(--series-4); font-family: Consolas, monospace; }
+  #status { color: var(--text-muted); font-size: 11px; }
+  .fade { animation: fadein .3s ease; }
+  @keyframes fadein { from { opacity: .4; } to { opacity: 1; } }
+</style>
+</head>
+<body>
+<div class="aurora"><i></i><i></i><i></i></div>
+<header>
+  <div class="hi">
+    <h1 id="greet">📟 AI 用量监控</h1>
+    <div class="sub" id="greetSub"></div>
+  </div>
+  <span id="status"></span>
+  <svg class="ring" id="ring" viewBox="0 0 26 26" title="点击立即刷新">
+    <circle class="bg" cx="13" cy="13" r="10.5"></circle>
+    <circle class="fg" cx="13" cy="13" r="10.5" transform="rotate(-90 13 13)"></circle>
+    <text x="13" y="13.5" id="ringT">30</text>
+  </svg>
+  <div class="seg" id="appSeg">
+    <button data-v="all" class="on">全部</button>
+  </div>
+  <div class="seg" id="daySeg">
+    <button data-v="7" class="on">7天</button>
+    <button data-v="14">14天</button>
+    <button data-v="30">30天</button>
+    <button data-v="90">90天</button>
+  </div>
+  <button class="gear" id="gearBtn" title="自定义定价">⚙️</button>
+</header>
+
+<div class="tiles" id="tiles"></div>
+
+<div class="card">
+  <h2>📊 每日成本 · 按模型 <span class="hint">悬停查看明细</span></h2>
+  <svg id="chart" width="100%" height="200"></svg>
+  <div class="legend" id="legend"></div>
+</div>
+
+<div class="card">
+  <h2>🕐 活动热力图 <span class="hint">什么时间烧钱最多（按小时成本）</span></h2>
+  <div style="overflow-x:auto"><table class="heat" id="heat"></table></div>
+</div>
+
+<div class="card">
+  <h2>🧊 缓存效率 <span class="hint">命中率 = 缓存读取 ÷ 全部输入token</span></h2>
+  <div class="cachecard">
+    <div class="halo">
+      <svg viewBox="0 0 150 150">
+        <defs>
+          <linearGradient id="haloGrad" x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0" stop-color="#2dd4bf"/><stop offset="1" stop-color="#0a84ff"/>
+          </linearGradient>
+        </defs>
+        <circle class="trk" cx="75" cy="75" r="64"></circle>
+        <circle class="arcGlow" id="haloGlow" cx="75" cy="75" r="64"></circle>
+        <circle class="arc" id="haloArc" cx="75" cy="75" r="64"></circle>
+      </svg>
+      <div class="ct"><div class="pct" id="haloP">–</div><div class="pl">缓存命中率</div></div>
+    </div>
+    <div class="cmetrics" id="cacheMetrics"></div>
+  </div>
+</div>
+
+<div class="duo">
+  <div class="card">
+    <h2>🤖 模型排行 <span class="hint" id="modelCount"></span></h2>
+    <div id="modelList"></div>
+  </div>
+  <div class="card">
+    <h2>📁 项目分布 <span class="hint">按工作目录</span></h2>
+    <div id="projList"></div>
+  </div>
+</div>
+
+<div class="duo">
+  <div class="card">
+    <h2>⌨️ 常用命令</h2>
+    <div id="cmdList"></div>
+  </div>
+  <div class="card">
+    <h2>🎯 趣味统计</h2>
+    <div class="fun" id="funList"></div>
+  </div>
+</div>
+
+<div class="card">
+  <h2>💬 会话记录 <span class="hint">每个终端窗口一行 · 点击看全部命令与输入</span></h2>
+  <table class="sess">
+    <thead><tr>
+      <th></th><th>最后活动</th><th>来源</th><th>模型</th><th>目录</th><th>首条输入</th>
+      <th class="num">输入</th><th class="num">命令</th><th class="num">Tokens</th><th class="num">成本</th>
+    </tr></thead>
+    <tbody id="sessBody"></tbody>
+  </table>
+</div>
+
+<div id="tip"></div>
+<div id="drawer"><button class="close" onclick="drawer.classList.remove('open')">✕</button><div id="drawerBody"></div></div>
+
+<div id="modal">
+  <div class="mbox">
+    <h3>💲 自定义定价</h3>
+    <div class="mnote">单位：美元 / 百万 token。按模型名<b>子串匹配</b>，多条命中时取最长的那条；<b>default</b> 是兜底价，不可删除。保存后立即重算全部成本。</div>
+    <table class="ptab">
+      <thead><tr><th>匹配模式</th><th>输入</th><th>输出</th><th>缓存写</th><th>缓存读</th><th></th></tr></thead>
+      <tbody id="pBody"></tbody>
+    </table>
+    <div class="mbtns">
+      <button class="btn" id="pAdd">＋ 添加条目</button>
+      <button class="btn primary" id="pSave">保存</button>
+      <button class="btn" onclick="modal.classList.remove('open')">取消</button>
+      <span id="pmsg"></span>
+    </div>
+  </div>
+</div>
+
+<script>
+const SLOTS = ['--series-1','--series-2','--series-3','--series-4','--series-5','--series-6','--series-7','--series-8'];
+const OTHER_COLOR = '#5a5a56';
+const REFRESH_S = 30;
+let DATA = null, appFilter = 'all', days = 7, colorMap = new Map(), countdown = REFRESH_S;
+const $ = id => document.getElementById(id);
+const tip = $('tip'), drawer = $('drawer');
+const css = v => getComputedStyle(document.documentElement).getPropertyValue(v).trim();
+
+function fmtCost(c) { return '$' + (c >= 1000 ? (c/1000).toFixed(2)+'k' : c >= 100 ? c.toFixed(0) : c >= 10 ? c.toFixed(1) : c.toFixed(2)); }
+function fmtTok(t) {
+  if (t >= 1e9) return (t/1e9).toFixed(2) + 'B';
+  if (t >= 1e6) return (t/1e6).toFixed(1) + 'M';
+  if (t >= 1e3) return (t/1e3).toFixed(1) + 'k';
+  return String(t);
+}
+function fmtTime(ts) {
+  const d = new Date(ts), now = Date.now(), diff = now - ts;
+  if (diff < 60000) return '刚刚';
+  if (diff < 3600000) return Math.floor(diff / 60000) + '分钟前';
+  const hm = String(d.getHours()).padStart(2,'0') + ':' + String(d.getMinutes()).padStart(2,'0');
+  if (d.toDateString() === new Date().toDateString()) return hm;
+  return (d.getMonth()+1) + '/' + d.getDate() + ' ' + hm;
+}
+function tokSum(u) { return u.in + u.cw + u.cr + u.out; }
+function esc(s) { return String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
+function coffee(c) { const n = c / 2.5; return n < 1 ? '' : '≈ ' + (n >= 100 ? Math.round(n) : n.toFixed(1)) + ' 杯咖啡'; }
+
+function greeting() {
+  const h = new Date().getHours();
+  if (h < 6) return ['🌙 夜深了', '还在肝吗？注意休息'];
+  if (h < 12) return ['☀️ 早上好', '新的一天，从看看昨天烧了多少钱开始'];
+  if (h < 18) return ['📟 下午好', '监控运转中'];
+  return ['🌆 晚上好', '今天的战况如下'];
+}
+
+// 颜色按模型实体固定分配（基于全量数据前8名，不随筛选变化）
+function assignColors(models) {
+  colorMap = new Map();
+  models.slice(0, 8).forEach((m, i) => colorMap.set(m.model, css(SLOTS[i])));
+}
+function colorOf(model) { return colorMap.get(model) || OTHER_COLOR; }
+function appOK(app) { return appFilter === 'all' || app === appFilter; }
+function appName(id) { const a = (DATA.apps || []).find(a => a.id === id); return a ? a.name : id; }
+
+// 数据源筛选按钮根据实际有数据的工具动态生成
+function buildAppSeg() {
+  const seg = $('appSeg');
+  const want = ['all', ...(DATA.apps || []).map(a => a.id)];
+  const have = [...seg.children].map(b => b.dataset.v);
+  if (want.join() !== have.join()) {
+    seg.innerHTML = '<button data-v="all">全部</button>' +
+      (DATA.apps || []).map(a => `<button data-v="${esc(a.id)}">${esc(a.name)}</button>`).join('');
+  }
+  if (!want.includes(appFilter)) appFilter = 'all';
+  [...seg.children].forEach(b => b.classList.toggle('on', b.dataset.v === appFilter));
+}
+
+function filteredDaily() {
+  return DATA.daily.map(d => {
+    const byModel = {};
+    for (const [app, models] of Object.entries(d.byApp)) {
+      if (!appOK(app)) continue;
+      for (const [m, u] of Object.entries(models)) {
+        if (!byModel[m]) byModel[m] = { cost: 0, tok: 0 };
+        byModel[m].cost += u.cost; byModel[m].tok += tokSum(u);
+      }
+    }
+    return { date: d.date, byModel };
+  });
+}
+
+function showTip(ev, html) {
+  tip.innerHTML = html;
+  tip.style.display = 'block';
+  tip.style.left = Math.min(ev.clientX + 12, innerWidth - 290) + 'px';
+  tip.style.top = Math.min(ev.clientY + 12, innerHeight - 120) + 'px';
+}
+function hideTip() { tip.style.display = 'none'; }
+
+function render() {
+  if (!DATA) return;
+  buildAppSeg();
+  assignColors(DATA.models);
+  const daily = filteredDaily();
+  const sessions = DATA.sessions.filter(s => appOK(s.app));
+  const models = DATA.models
+    .map(m => {
+      if (appFilter === 'all') return { model: m.model, cost: m.cost, tokens: m.tokens };
+      const u = m.byApp[appFilter];
+      return { model: m.model, cost: u ? u.cost : 0, tokens: u ? tokSum(u) : 0 };
+    })
+    .filter(m => m.cost > 0.0001 || m.tokens > 0)
+    .sort((a, b) => b.cost - a.cost);
+
+  let rangeCost = 0, todayCost = 0, todayTok = 0, rangeTok = 0;
+  for (const d of daily) for (const u of Object.values(d.byModel)) { rangeCost += u.cost; rangeTok += u.tok; }
+  const today = daily.find(d => d.date === DATA.todayStr);
+  if (today) for (const u of Object.values(today.byModel)) { todayCost += u.cost; todayTok += u.tok; }
+  const activeN = sessions.filter(s => s.active).length;
+  const avgDaily = rangeCost / Math.max(1, daily.length);
+
+  const [g, gs] = greeting();
+  $('greet').textContent = g + ' · AI 用量监控';
+  $('greetSub').textContent = gs;
+  document.title = `AI 用量 · 今日 ${fmtCost(todayCost)}`;
+
+  $('tiles').innerHTML = [
+    { lab: '今日成本', val: fmtCost(todayCost), sub: coffee(todayCost) || fmtTok(todayTok) + ' tokens' },
+    { lab: days + '天成本', val: fmtCost(rangeCost), sub: '日均 ' + fmtCost(avgDaily) },
+    { lab: '活跃会话', val: activeN, sub: activeN ? '正在输出中 🟢' : '当前无活动' },
+    { lab: '缓存帮你省了', val: fmtCost(DATA.stats.savedByCache), sub: '若无缓存要多花这么多' },
+    { lab: '照此速度本月', val: fmtCost(avgDaily * 30), sub: coffee(avgDaily * 30) || '预估' },
+  ].map((t, i) => `<div class="tile fade${i === 0 ? ' hero' : ''}"><div class="lab">${t.lab}</div><div class="val">${t.val}</div><div class="sub">${t.sub}</div></div>`).join('');
+
+  renderChart(daily);
+  renderHeat();
+  renderBars('modelList', models.map(m => ({
+    name: m.model, color: colorOf(m.model), v: m.cost, right1: fmtTok(m.tokens), right2: fmtCost(m.cost),
+  })));
+  $('modelCount').textContent = '共 ' + models.length + ' 个模型';
+  renderBars('projList', DATA.projects.map(p => ({
+    name: p.name, color: css('--series-7'), v: p.cost, right1: p.sessions + ' 会话', right2: fmtCost(p.cost),
+  })));
+  renderBars('cmdList', DATA.commands.map(c => ({
+    name: c.name, color: css('--series-4'), v: c.count, right1: '', right2: c.count + ' 次', mono: true,
+  })));
+  renderCache();
+  renderFun();
+  renderSessions(sessions);
+  $('status').textContent = '更新于 ' + fmtTime(DATA.generatedAt);
+}
+
+function renderBars(id, rows) {
+  const max = Math.max(0.0001, ...rows.map(r => r.v));
+  $(id).innerHTML = rows.map(r => `
+    <div class="mrow">
+      <div class="name" title="${esc(r.name)}" ${r.mono ? 'style="font-family:Consolas,monospace"' : ''}><span class="swatch" style="background:${r.color}"></span>${esc(r.name)}</div>
+      <div class="track"><div class="fill" style="width:${(r.v / max * 100).toFixed(1)}%;background:${r.color}"></div></div>
+      <div class="num">${r.right1}</div>
+      <div class="num">${r.right2}</div>
+    </div>`).join('') || '<div class="muted">该范围内无数据</div>';
+}
+
+function renderChart(daily) {
+  const svg = $('chart');
+  const W = svg.clientWidth || 700, H = 200, padL = 46, padB = 20, padT = 8;
+  svg.setAttribute('viewBox', `0 0 ${W} ${H}`);
+  svg.innerHTML = '';
+  const maxCost = Math.max(0.01, ...daily.map(d => Object.values(d.byModel).reduce((a, u) => a + u.cost, 0)));
+  const plotW = W - padL - 8, plotH = H - padT - padB;
+  const bw = Math.min(46, plotW / Math.max(1, daily.length) * 0.62);
+  const step = plotW / Math.max(1, daily.length);
+  const ns = 'http://www.w3.org/2000/svg';
+  const el = (t, attrs) => { const e = document.createElementNS(ns, t); for (const k in attrs) e.setAttribute(k, attrs[k]); return e; };
+
+  for (let i = 0; i <= 3; i++) {
+    const v = maxCost / 3 * i, y = padT + plotH - plotH * i / 3;
+    svg.appendChild(el('line', { x1: padL, x2: W - 8, y1: y, y2: y, stroke: css('--grid'), 'stroke-width': 1 }));
+    const t = el('text', { x: padL - 6, y: y + 3, 'text-anchor': 'end', fill: css('--text-muted'), 'font-size': 10 });
+    t.textContent = '$' + (v >= 100 ? v.toFixed(0) : v.toFixed(v >= 10 ? 0 : 1));
+    svg.appendChild(t);
+  }
+  svg.appendChild(el('line', { x1: padL, x2: W - 8, y1: padT + plotH, y2: padT + plotH, stroke: css('--baseline'), 'stroke-width': 1 }));
+
+  const modelOrder = [...colorMap.keys()];
+  daily.forEach((d, i) => {
+    const x = padL + step * i + (step - bw) / 2;
+    let y = padT + plotH;
+    const ordered = Object.entries(d.byModel).sort((a, b) => {
+      const ia = modelOrder.indexOf(a[0]), ib = modelOrder.indexOf(b[0]);
+      return (ia < 0 ? 99 : ia) - (ib < 0 ? 99 : ib);
+    });
+    const segs = ordered.map(([m, u]) => ({ m, u, h: u.cost / maxCost * plotH })).filter(s => s.h >= 0.5);
+    segs.forEach((s, j) => {
+      const gap = j < segs.length - 1 ? 2 : 0;
+      const h = Math.max(1, s.h - gap);
+      y -= s.h;
+      svg.appendChild(el('rect', { x, y, width: bw, height: h, fill: colorOf(s.m), rx: j === segs.length - 1 ? 3 : 0 }));
+    });
+    if (daily.length <= 10 || i % Math.ceil(daily.length / 8) === 0) {
+      const t = el('text', { x: x + bw / 2, y: H - 5, 'text-anchor': 'middle', fill: css('--text-muted'), 'font-size': 10 });
+      t.textContent = d.date.slice(5).replace('-', '/');
+      svg.appendChild(t);
+    }
+    const hit = el('rect', { x: padL + step * i, y: padT, width: step, height: plotH, fill: 'transparent' });
+    hit.addEventListener('mousemove', ev => {
+      const rows = ordered.filter(([, u]) => u.cost > 0.0001).reverse()
+        .map(([m, u]) => `<div class="r"><span><i style="background:${colorOf(m)}"></i>${esc(m)}</span><b>${fmtCost(u.cost)}</b></div>`).join('');
+      const total = ordered.reduce((a, [, u]) => a + u.cost, 0);
+      showTip(ev, `<div class="t">${d.date} · ${fmtCost(total)}</div>${rows || '<div class="r muted">无用量</div>'}`);
+    });
+    hit.addEventListener('mouseleave', hideTip);
+    svg.appendChild(hit);
+  });
+
+  $('legend').innerHTML = [...colorMap.entries()]
+    .map(([m, c]) => `<span><i style="background:${c}"></i>${esc(m)}</span>`).join('') +
+    (DATA.models.length > 8 ? `<span><i style="background:${OTHER_COLOR}"></i>其他 ${DATA.models.length - 8} 个</span>` : '');
+}
+
+// 冰蓝单色渐变（tone-on-tone，零值退到底色）
+function heatColor(v, max) {
+  if (v <= 0) return 'rgba(255,255,255,.06)';
+  const t = Math.sqrt(v / max);
+  const lo = [42, 62, 96], hi = [125, 211, 252];
+  const c = lo.map((l, i) => Math.round(l + (hi[i] - l) * t));
+  return `rgb(${c[0]},${c[1]},${c[2]})`;
+}
+function renderHeat() {
+  const dates = Object.keys(DATA.hourly).sort().slice(-14);
+  if (!dates.length) { $('heat').innerHTML = '<tr><td class="muted">无数据</td></tr>'; return; }
+  let max = 0.001;
+  for (const d of dates) for (const v of DATA.hourly[d]) if (v > max) max = v;
+  let html = '<tr><td class="rl"></td>' + [...Array(24)].map((_, h) => `<td class="cl">${h % 3 === 0 ? h : ''}</td>`).join('') + '</tr>';
+  for (const d of dates) {
+    html += `<tr><td class="rl">${d.slice(5).replace('-', '/')}</td>` + DATA.hourly[d].map((v, h) =>
+      `<td style="background:${heatColor(v, max)}" data-d="${d}" data-h="${h}" data-v="${v}"></td>`).join('') + '</tr>';
+  }
+  $('heat').innerHTML = html;
+  $('heat').addEventListener('mousemove', ev => {
+    const td = ev.target.closest('td[data-v]');
+    if (!td) return hideTip();
+    showTip(ev, `<div class="t">${td.dataset.d} ${td.dataset.h}:00</div><div class="r"><span>成本</span><b>${fmtCost(+td.dataset.v)}</b></div>`);
+  });
+  $('heat').addEventListener('mouseleave', hideTip);
+}
+
+const HALO_C = 2 * Math.PI * 64;
+function cacheAgg(appIds) {
+  let inn = 0, cw = 0, cr = 0;
+  for (const m of DATA.models) for (const app of appIds) {
+    const u = m.byApp[app];
+    if (!u) continue;
+    inn += u.in; cw += u.cw; cr += u.cr;
+  }
+  const denom = inn + cw + cr;
+  return { in: inn, cw, cr, rate: denom > 0 ? cr / denom : 0 };
+}
+function renderCache() {
+  const allIds = (DATA.apps || []).map(a => a.id);
+  const main = cacheAgg(appFilter === 'all' ? allIds : [appFilter]);
+  const off = HALO_C * (1 - main.rate);
+  for (const id of ['haloArc', 'haloGlow']) {
+    const el = $(id);
+    el.setAttribute('stroke-dasharray', HALO_C);
+    el.setAttribute('stroke-dashoffset', off);
+  }
+  $('haloP').textContent = (main.rate * 100).toFixed(1) + '%';
+  const perApp = (DATA.apps || [])
+    .map(a => ({ name: a.name, ...cacheAgg([a.id]) }))
+    .filter(r => r.in + r.cw + r.cr > 0).slice(0, 4);
+  $('cacheMetrics').innerHTML = [
+    ...perApp.map(r => ({ cl: r.name + ' 命中率', cv: (r.rate * 100).toFixed(1) + '%', w: r.rate, cs: '读取 ' + fmtTok(r.cr) })),
+    { cl: '累计缓存读取', cv: fmtTok(main.cr), w: null, cs: '省下约 ' + fmtCost(DATA.stats.savedByCache) },
+  ].map(m => `<div class="cm">
+      <div class="cl">${m.cl}</div><div class="cv">${m.cv}</div>
+      ${m.w !== null ? `<div class="bar"><div style="width:${(m.w * 100).toFixed(1)}%"></div></div>` : ''}
+      <div class="cs">${m.cs}</div>
+    </div>`).join('');
+}
+
+function renderFun() {
+  const s = DATA.stats;
+  const night = (s.nightShare * 100).toFixed(0);
+  const owl = night >= 30 ? '重度夜猫 🌙' : night >= 10 ? '偶尔熬夜' : '作息健康 ✨';
+  $('funList').innerHTML = [
+    { fl: '🔥 连续活跃', fv: s.streak + ' 天', fs: s.streak >= 7 ? '全勤打工人' : '' },
+    { fl: '💸 最烧钱的一天', fv: s.maxDay ? fmtCost(s.maxDay.cost) : '–', fs: s.maxDay ? s.maxDay.date.slice(5).replace('-', '/') + (coffee(s.maxDay.cost) ? ' · ' + coffee(s.maxDay.cost) : '') : '' },
+    { fl: '👑 最贵会话', fv: s.maxSession ? fmtCost(s.maxSession.cost) : '–', fs: s.maxSession ? esc(s.maxSession.title.slice(0, 26)) : '' },
+    { fl: '🦉 夜猫指数', fv: night + '%', fs: owl + '（0-6点占比）' },
+    { fl: '✍️ 累计输入', fv: s.promptTotal + ' 条', fs: '外加 ' + s.cmdTotal + ' 条命令' },
+  ].map(f => `<div class="funit"><div class="fl">${f.fl}</div><div class="fv">${f.fv}</div><div class="fs">${f.fs}</div></div>`).join('');
+}
+
+function renderSessions(sessions) {
+  $('sessBody').innerHTML = sessions.slice(0, 150).map((s, i) => {
+    const dir = s.cwd ? s.cwd.split(/[\\/]/).filter(Boolean).pop() : '–';
+    const cls = s.agent ? 'agent' : s.app;
+    const src = s.agent ? '子代理' : appName(s.app);
+    return `<tr data-i="${i}">
+      <td><span class="dot${s.active ? ' live' : ''}"></span></td>
+      <td class="muted" style="white-space:nowrap">${fmtTime(s.end)}</td>
+      <td><span class="app-tag ${cls}">${src}</span></td>
+      <td class="ellip" style="max-width:120px" title="${esc(s.models.join(', '))}">${esc(s.models.map(m => m.replace('claude-','')).join(', ')) || '–'}</td>
+      <td class="ellip" style="max-width:100px" title="${esc(s.cwd || '')}">${esc(dir)}</td>
+      <td class="ellip" title="${esc(s.title)}">${esc(s.title)}</td>
+      <td class="num">${s.promptCount}</td>
+      <td class="num">${s.cmdCount}</td>
+      <td class="num">${fmtTok(tokSum(s.u))}</td>
+      <td class="num">${fmtCost(s.u.cost)}</td>
+    </tr>`;
+  }).join('') || '<tr><td colspan="10" class="muted">无会话</td></tr>';
+  [...$('sessBody').querySelectorAll('tr[data-i]')].forEach(r =>
+    r.addEventListener('click', () => openDrawer(sessions[+r.dataset.i])));
+}
+
+async function openDrawer(s) {
+  drawer.classList.add('open');
+  $('drawerBody').innerHTML = '<div class="muted">加载中…</div>';
+  const res = await fetch(`/api/session?app=${s.app}&id=${encodeURIComponent(s.id)}`);
+  const d = await res.json();
+  const total = Math.max(1, tokSum(s.u));
+  const seg = (v, c) => v > 0 ? `<div style="width:${(v/total*100).toFixed(2)}%;background:${c}" title="${fmtTok(v)}"></div>` : '';
+  const evs = (d.events || []).map(e => `
+    <div class="ev ${e.kind}">
+      <div class="ts">${e.ts ? fmtTime(e.ts) : ''} · ${e.kind === 'command' ? '命令' : '输入'}</div>
+      <div class="tx">${esc(e.text)}</div>
+    </div>`).join('');
+  $('drawerBody').innerHTML = `
+    <h3>${esc(s.models.join(', ') || s.app)} · ${fmtCost(s.u.cost)}</h3>
+    <div class="meta">${esc(s.cwd || '')}<br>会话 ${esc(s.id)} · ${fmtTok(tokSum(s.u))} tokens</div>
+    <div class="tokbar">${seg(s.u.in, css('--series-1'))}${seg(s.u.cw, css('--series-2'))}${seg(s.u.cr, css('--series-3'))}${seg(s.u.out, css('--series-5'))}</div>
+    <div class="legend" style="margin:-6px 0 12px">
+      <span><i style="background:${css('--series-1')}"></i>输入 ${fmtTok(s.u.in)}</span>
+      <span><i style="background:${css('--series-2')}"></i>缓存写 ${fmtTok(s.u.cw)}</span>
+      <span><i style="background:${css('--series-3')}"></i>缓存读 ${fmtTok(s.u.cr)}</span>
+      <span><i style="background:${css('--series-5')}"></i>输出 ${fmtTok(s.u.out)}</span>
+    </div>
+    ${evs || '<div class="muted">无输入记录</div>'}`;
+}
+
+// 刷新倒计时环
+const ringFg = document.querySelector('#ring .fg');
+const RING_C = 2 * Math.PI * 10.5;
+ringFg.style.strokeDasharray = RING_C;
+function tickRing() {
+  countdown--;
+  if (countdown <= 0) { load(); return; }
+  ringFg.style.strokeDashoffset = RING_C * (1 - countdown / REFRESH_S);
+  $('ringT').textContent = countdown;
+}
+setInterval(tickRing, 1000);
+$('ring').addEventListener('click', load);
+
+async function load() {
+  countdown = REFRESH_S;
+  ringFg.style.strokeDashoffset = 0;
+  $('ringT').textContent = REFRESH_S;
+  $('status').textContent = '加载中…';
+  try {
+    const res = await fetch('/api/data?days=' + days);
+    DATA = await res.json();
+    render();
+  } catch (e) { $('status').textContent = '加载失败: ' + e.message; }
+}
+
+for (const [segId, setter] of [['appSeg', v => appFilter = v], ['daySeg', v => { days = +v; load(); }]]) {
+  $(segId).addEventListener('click', e => {
+    const b = e.target.closest('button'); if (!b) return;
+    [...$(segId).children].forEach(x => x.classList.remove('on'));
+    b.classList.add('on');
+    setter(b.dataset.v);
+    if (segId === 'appSeg') render();
+  });
+}
+// ---- 定价编辑器 ----
+const modal = $('modal');
+let pComment = '';
+function pRowHtml(k, v, isDefault) {
+  const cell = f => `<td><input class="pv" data-f="${f}" type="number" step="any" min="0" value="${v[f] ?? 0}"></td>`;
+  return `<tr>
+    <td><input class="pk" value="${esc(k)}" placeholder="模型名子串" ${isDefault ? 'disabled' : ''}></td>
+    ${cell('input')}${cell('output')}${cell('cacheWrite')}${cell('cacheRead')}
+    <td>${isDefault ? '' : '<button class="del" title="删除">✕</button>'}</td>
+  </tr>`;
+}
+async function openPricing() {
+  try {
+    const p = await (await fetch('/api/pricing')).json();
+    pComment = p._comment || '';
+    const keys = Object.keys(p).filter(k => !k.startsWith('_') && k !== 'default');
+    $('pBody').innerHTML = keys.map(k => pRowHtml(k, p[k], false)).join('') + pRowHtml('default', p.default || {}, true);
+    $('pmsg').textContent = '';
+    modal.classList.add('open');
+  } catch (e) { alert('读取定价失败: ' + e.message); }
+}
+$('gearBtn').addEventListener('click', openPricing);
+$('pAdd').addEventListener('click', () => {
+  $('pBody').insertAdjacentHTML('afterbegin', pRowHtml('', { input: 0, output: 0, cacheWrite: 0, cacheRead: 0 }, false));
+  $('pBody').querySelector('.pk').focus();
+});
+$('pBody').addEventListener('click', e => {
+  const b = e.target.closest('.del');
+  if (b) b.closest('tr').remove();
+});
+$('pSave').addEventListener('click', async () => {
+  const obj = {};
+  if (pComment) obj._comment = pComment;
+  for (const tr of $('pBody').querySelectorAll('tr')) {
+    const k = tr.querySelector('.pk').value.trim();
+    if (!k) continue;
+    const v = {};
+    for (const inp of tr.querySelectorAll('.pv')) v[inp.dataset.f] = parseFloat(inp.value) || 0;
+    obj[k] = v;
+  }
+  try {
+    const res = await fetch('/api/pricing', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(obj) });
+    const j = await res.json();
+    if (j.ok) {
+      $('pmsg').textContent = '✓ 已保存，成本重算中…'; $('pmsg').style.color = 'var(--good)';
+      setTimeout(() => { modal.classList.remove('open'); load(); }, 700);
+    } else { $('pmsg').textContent = j.error || '保存失败'; $('pmsg').style.color = '#ff6b6b'; }
+  } catch (e) { $('pmsg').textContent = '保存失败: ' + e.message; $('pmsg').style.color = '#ff6b6b'; }
+});
+modal.addEventListener('click', e => { if (e.target === modal) modal.classList.remove('open'); });
+
+window.addEventListener('resize', () => DATA && render());
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape') { drawer.classList.remove('open'); modal.classList.remove('open'); }
+});
+load();
+</script>
+</body>
+</html>

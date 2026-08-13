@@ -1,0 +1,123 @@
+{
+  "_comment": "每百万 token 价格 (USD)。cacheWrite=缓存写入, cacheRead=缓存读取。按模型名子串匹配，可自行修改。",
+  "claude-fable-5": {
+    "input": 10,
+    "output": 50,
+    "cacheWrite": 12.5,
+    "cacheRead": 1
+  },
+  "claude-mythos-5": {
+    "input": 10,
+    "output": 50,
+    "cacheWrite": 12.5,
+    "cacheRead": 1
+  },
+  "claude-opus-5": {
+    "input": 5,
+    "output": 25,
+    "cacheWrite": 6.25,
+    "cacheRead": 0.5
+  },
+  "claude-opus-4-8": {
+    "input": 5,
+    "output": 25,
+    "cacheWrite": 6.25,
+    "cacheRead": 0.5
+  },
+  "claude-opus-4-7": {
+    "input": 5,
+    "output": 25,
+    "cacheWrite": 6.25,
+    "cacheRead": 0.5
+  },
+  "claude-opus-4-6": {
+    "input": 5,
+    "output": 25,
+    "cacheWrite": 6.25,
+    "cacheRead": 0.5
+  },
+  "claude-opus": {
+    "input": 5,
+    "output": 25,
+    "cacheWrite": 6.25,
+    "cacheRead": 0.5
+  },
+  "claude-sonnet-5": {
+    "input": 3,
+    "output": 15,
+    "cacheWrite": 3.75,
+    "cacheRead": 0.3
+  },
+  "claude-sonnet": {
+    "input": 3,
+    "output": 15,
+    "cacheWrite": 3.75,
+    "cacheRead": 0.3
+  },
+  "claude-haiku-4-5": {
+    "input": 1,
+    "output": 5,
+    "cacheWrite": 1.25,
+    "cacheRead": 0.1
+  },
+  "claude-haiku": {
+    "input": 1,
+    "output": 5,
+    "cacheWrite": 1.25,
+    "cacheRead": 0.1
+  },
+  "gpt-5": {
+    "input": 1.25,
+    "output": 10,
+    "cacheWrite": 0,
+    "cacheRead": 0.125
+  },
+  "gpt-4": {
+    "input": 2.5,
+    "output": 10,
+    "cacheWrite": 0,
+    "cacheRead": 1.25
+  },
+  "gemini-2.5-pro": {
+    "input": 1.25,
+    "output": 10,
+    "cacheWrite": 0,
+    "cacheRead": 0.31
+  },
+  "gemini-2.5-flash": {
+    "input": 0.3,
+    "output": 2.5,
+    "cacheWrite": 0,
+    "cacheRead": 0.075
+  },
+  "gemini": {
+    "input": 1.25,
+    "output": 10,
+    "cacheWrite": 0,
+    "cacheRead": 0.31
+  },
+  "deepseek": {
+    "input": 0.28,
+    "output": 0.42,
+    "cacheWrite": 0,
+    "cacheRead": 0.028
+  },
+  "grok": {
+    "input": 3,
+    "output": 15,
+    "cacheWrite": 0,
+    "cacheRead": 0.75
+  },
+  "qwythos": {
+    "input": 0,
+    "output": 0,
+    "cacheWrite": 0,
+    "cacheRead": 0
+  },
+  "default": {
+    "input": 5,
+    "output": 25,
+    "cacheWrite": 6.25,
+    "cacheRead": 0.5
+  }
+}
