@@ -34,7 +34,8 @@ function costOf(model, u) {
 function cleanModel(model) {
   if (!model) return 'unknown';
   const idx = model.indexOf('::');
-  return idx >= 0 ? model.slice(idx + 2) : model;
+  // 统一小写：同一模型有时大小写不一致（GLM-5.2 / glm-5.2），否则会拆成两行
+  return (idx >= 0 ? model.slice(idx + 2) : model).toLowerCase();
 }
 
 // ---------- 通用工具 ----------
@@ -357,6 +358,90 @@ function parseDshFile(fp) {
   return data;
 }
 
+// ---------- 数据源: Reasonix ----------
+// 每个会话一个 <时间戳>-<模型>.jsonl.telemetry.json，里面是整段用量汇总
+const APPDATA = process.env.APPDATA || path.join(HOME, 'AppData', 'Roaming');
+const LOCALAPPDATA = process.env.LOCALAPPDATA || path.join(HOME, 'AppData', 'Local');
+const REASONIX_DIR = path.join(APPDATA, 'reasonix', 'projects');
+
+// 把 Claude 风格的目录别名还原成路径：C--Users-PY-foo → C:\Users\PY\foo
+function unslug(slug) {
+  return String(slug).replace(/^([A-Za-z])--/, '$1:\\').replace(/-/g, '\\');
+}
+
+function parseReasonixFile(fp) {
+  const base = path.basename(fp).replace(/\.jsonl\.telemetry\.json$/, '');
+  const m = base.match(/^(\d{4})(\d{2})(\d{2})-(\d{2})(\d{2})(\d{2})[.\d]*-(.+)$/);
+  let ts = null, model = 'unknown';
+  if (m) {
+    ts = new Date(+m[1], +m[2] - 1, +m[3], +m[4], +m[5], +m[6]).getTime();
+    // 文件名里 provider 和 model 可能重复：deepseek-deepseek-v4-flash
+    model = m[7].replace(/^([a-z0-9]+)-\1-/i, '$1-');
+  }
+  if (!ts) { try { ts = fs.statSync(fp).mtimeMs; } catch { ts = Date.now(); } }
+  const j = JSON.parse(fs.readFileSync(fp, 'utf8'));
+  const u = j.usage || {};
+  const sessDir = path.dirname(fp);
+  const data = {
+    app: 'reasonix', id: base, agent: false,
+    cwd: unslug(path.basename(path.dirname(sessDir))), source: null,
+    firstTs: ts, lastTs: ts + (u.elapsedMs || 0),
+    usageEntries: [], events: [],
+  };
+  const cr = u.cacheHitTokens || 0;
+  if (u.promptTokens || u.completionTokens) {
+    data.usageEntries.push({
+      mid: base, rid: null, model, ts,
+      u: {
+        in: u.cacheMissTokens != null ? u.cacheMissTokens : Math.max(0, (u.promptTokens || 0) - cr),
+        cw: 0, cr,
+        out: u.completionTokens || 0, // 已含 reasoningTokens
+      },
+    });
+  }
+  try { // 同名 goal-state 里是这次会话的目标，拿来当标题
+    const goal = JSON.parse(fs.readFileSync(path.join(sessDir, base + '.goal-state.json'), 'utf8')).goal;
+    if (goal) data.events.push({ ts, kind: 'prompt', text: String(goal).slice(0, 300) });
+  } catch {}
+  return data;
+}
+
+// ---------- 数据源: ZCode CLI ----------
+// rollout/model-io-*.jsonl：一行一次模型往返，行可能有数 MB
+const ZCODE_DIR = path.join(HOME, '.zcode', 'cli', 'rollout');
+
+function parseZcodeFile(fp) {
+  const data = {
+    app: 'zcode', id: path.basename(fp, '.jsonl').replace(/^model-io-/, ''), agent: false,
+    cwd: null, source: null, firstTs: null, lastTs: null,
+    usageEntries: [], events: [],
+  };
+  eachLine(fp, (line) => {
+    if (!line || line[0] !== '{') return;
+    let e;
+    try { e = JSON.parse(line); } catch { return; }
+    const ts = e.completedAt ? Date.parse(e.completedAt) : (e.startedAt ? Date.parse(e.startedAt) : null);
+    if (ts) {
+      if (!data.firstTs || ts < data.firstTs) data.firstTs = ts;
+      if (!data.lastTs || ts > data.lastTs) data.lastTs = ts;
+    }
+    if (e.sessionId) data.id = e.sessionId;
+    const u = e.response && e.response.usage;
+    if (!u) return; // 出错的往返没有 usage
+    data.usageEntries.push({
+      mid: e.requestId || null, rid: null,
+      model: (e.model && e.model.modelId) || (e.response && e.response.modelId) || 'unknown', ts,
+      u: {
+        in: Math.max(0, (u.inputTokens || 0) - (u.cacheReadTokens || 0)),
+        cw: u.cacheWriteTokens || 0,
+        cr: u.cacheReadTokens || 0,
+        out: u.outputTokens || 0,
+      },
+    });
+  });
+  return data;
+}
+
 // ---------- 数据源: Continue (VSCode 扩展) ----------
 const CONTINUE_DIR = path.join(HOME, '.continue', 'dev_data');
 
@@ -415,7 +500,84 @@ const SOURCES = [
     list: () => walkFiles(CONTINUE_DIR, 2, n => n === 'tokensGenerated.jsonl'),
     parse: parseContinueFile,
   },
+  {
+    id: 'reasonix', name: 'Reasonix', kind: 'files', root: REASONIX_DIR,
+    list: () => walkFiles(REASONIX_DIR, 3, n => n.endsWith('.telemetry.json')),
+    parse: parseReasonixFile,
+  },
+  {
+    id: 'zcode', name: 'ZCode', kind: 'files', root: ZCODE_DIR,
+    list: () => walkFiles(ZCODE_DIR, 1, n => n.startsWith('model-io-') && n.endsWith('.jsonl')),
+    parse: parseZcodeFile,
+  },
 ];
+
+// ---------- 本机 AI 工具探测 ----------
+// 只看目录是否存在，不读内容：装了但没有用量日志的工具也如实列出来
+const P = { home: d => path.join(HOME, d), app: d => path.join(APPDATA, d), local: d => path.join(LOCALAPPDATA, d) };
+const vscodeExt = (host, ext) => path.join(APPDATA, host, 'User', 'globalStorage', ext);
+
+const TOOLBOX = [
+  // 已接入的（status 由 SOURCES 是否产出数据决定）
+  { id: 'claude', name: 'Claude Code', kind: 'CLI', paths: [P.home('.claude')] },
+  { id: 'codex', name: 'Codex', kind: 'CLI', paths: [P.home('.codex')] },
+  { id: 'gemini', name: 'Gemini CLI', kind: 'CLI', paths: [P.home('.gemini')] },
+  { id: 'dsh', name: 'DeepSeek Harness', kind: 'CLI', paths: [P.home('.dsh')] },
+  { id: 'opencode', name: 'OpenCode', kind: 'CLI', paths: [path.join(HOME, '.local', 'share', 'opencode'), P.app('ai.opencode.desktop')] },
+  { id: 'continue', name: 'Continue', kind: 'IDE 插件', paths: [P.home('.continue'), vscodeExt('Code', 'continue.continue')] },
+  { id: 'reasonix', name: 'Reasonix', kind: 'CLI', paths: [P.app('reasonix'), P.home('.reasonix')] },
+  { id: 'zcode', name: 'ZCode', kind: 'CLI', paths: [P.home('.zcode'), P.app('ZCode')] },
+  // 装了但本机日志里没有用量数据
+  { id: 'kiro', name: 'Kiro', kind: 'IDE', paths: [P.home('.kiro'), P.app('Kiro')], note: '会话日志不含 token 用量' },
+  { id: 'copilot', name: 'GitHub Copilot', kind: 'IDE 插件', paths: [P.home('.copilot'), vscodeExt('Code', 'github.copilot-chat')], note: '不落本地用量日志' },
+  { id: 'antigravity', name: 'Antigravity', kind: 'IDE', paths: [P.home('.antigravity'), P.app('Antigravity')], note: '会话是未公开的 protobuf 格式' },
+  { id: 'cagent', name: 'cagent', kind: 'CLI', paths: [P.home('.cagent')] },
+  { id: 'zagent', name: 'zagent', kind: 'CLI', paths: [P.home('.zagent')] },
+  { id: 'securecoder', name: 'SecureCoder', kind: 'CLI', paths: [P.home('.securecoder')] },
+  { id: 'workbuddy', name: 'WorkBuddy', kind: '桌面端', paths: [P.home('.workbuddy')] },
+  { id: 'hyperframes', name: 'Hyperframes', kind: 'CLI', paths: [P.home('.hyperframes')] },
+  { id: 'kimi', name: 'Kimi', kind: '桌面端', paths: [P.home('.kimi-work'), P.app('kimi-desktop')] },
+  { id: 'ccr', name: 'Claude Code Router', kind: '路由器', paths: [P.home('.claude-code-router')] },
+  { id: 'ccswitch', name: 'CC Switch', kind: '路由器', paths: [P.home('.cc-switch'), P.app('com.ccswitch.desktop')] },
+  { id: 'cliproxy', name: 'CLI Proxy API', kind: '路由器', paths: [P.home('.cli-proxy-api')] },
+  { id: 'codexpp', name: 'Codex++', kind: 'CLI', paths: [P.home('.codex-plusplus'), P.app('codex-plusplus')] },
+  { id: 'ollama', name: 'Ollama', kind: '本地模型', paths: [P.home('.ollama'), P.app('ollama app.exe')] },
+  { id: 'vscode', name: 'VS Code', kind: 'IDE', paths: [P.home('.vscode'), P.app('Code')] },
+  // 本机没装也保留，换台机器就能自动认出来
+  { id: 'cline', name: 'Cline', kind: 'IDE 插件', paths: [vscodeExt('Code', 'saoudrizwan.claude-dev'), vscodeExt('Cursor', 'saoudrizwan.claude-dev')] },
+  { id: 'roo', name: 'Roo Code', kind: 'IDE 插件', paths: [vscodeExt('Code', 'rooveterinaryinc.roo-cline')] },
+  { id: 'kilo', name: 'Kilo Code', kind: 'IDE 插件', paths: [vscodeExt('Code', 'kilocode.kilo-code')] },
+  { id: 'cursor', name: 'Cursor', kind: 'IDE', paths: [P.home('.cursor'), P.app('Cursor')] },
+  { id: 'windsurf', name: 'Windsurf', kind: 'IDE', paths: [P.home('.windsurf'), P.home('.codeium'), P.app('Windsurf')] },
+  { id: 'trae', name: 'Trae', kind: 'IDE', paths: [P.home('.trae'), P.app('Trae')] },
+  { id: 'zed', name: 'Zed', kind: 'IDE', paths: [P.home('.zed'), P.local('Zed')] },
+  { id: 'aider', name: 'Aider', kind: 'CLI', paths: [P.home('.aider'), P.home('.aider.conf.yml')] },
+  { id: 'goose', name: 'Goose', kind: 'CLI', paths: [path.join(HOME, '.local', 'share', 'goose'), P.home('.goose')] },
+  { id: 'crush', name: 'Crush', kind: 'CLI', paths: [path.join(HOME, '.local', 'share', 'crush'), P.home('.crush')] },
+  { id: 'amp', name: 'Amp', kind: 'CLI', paths: [P.home('.amp')] },
+  { id: 'factory', name: 'Factory Droid', kind: 'CLI', paths: [P.home('.factory')] },
+  { id: 'qwen', name: 'Qwen Code', kind: 'CLI', paths: [P.home('.qwen')] },
+  { id: 'iflow', name: 'iFlow', kind: 'CLI', paths: [P.home('.iflow')] },
+  { id: 'cody', name: 'Sourcegraph Cody', kind: 'IDE 插件', paths: [vscodeExt('Code', 'sourcegraph.cody-ai')] },
+  { id: 'augment', name: 'Augment', kind: 'IDE 插件', paths: [vscodeExt('Code', 'augment.vscode-augment')] },
+];
+
+let toolCache = { at: 0, list: [] };
+function detectTools(activeApps) {
+  const now = Date.now();
+  if (now - toolCache.at > 60000) { // 目录探测便宜，但没必要每次请求都做
+    toolCache = {
+      at: now,
+      list: TOOLBOX.filter(t => t.paths.some(p => fs.existsSync(p)))
+        .map(t => ({ id: t.id, name: t.name, kind: t.kind, note: t.note || null })),
+    };
+  }
+  const parsed = new Set(SOURCES.map(s => s.id));
+  return toolCache.list.map(t => ({
+    ...t,
+    status: activeApps.has(t.id) ? 'tracked' : parsed.has(t.id) ? 'idle' : 'detected',
+  }));
+}
 
 function getParsed(fp, parseFn, cutoffMs) {
   let st;
@@ -557,6 +719,7 @@ function aggregate(days) {
   const body = {
     generatedAt: now, days, todayStr,
     apps: SOURCES.filter(s => appsSeen.has(s.id)).map(s => ({ id: s.id, name: s.name })),
+    detected: detectTools(appsSeen),
     daily: [...daily.entries()].sort((a, b) => a[0] < b[0] ? -1 : 1)
       .map(([date, byApp]) => ({ date, byApp })),
     models: [...models.entries()].map(([model, byApp]) => {

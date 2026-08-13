@@ -132,6 +132,24 @@
     "cacheWrite": 0,
     "cacheRead": 0.75
   },
+  "glm": {
+    "input": 0.6,
+    "output": 2.2,
+    "cacheWrite": 0,
+    "cacheRead": 0.11
+  },
+  "kimi": {
+    "input": 0.6,
+    "output": 2.5,
+    "cacheWrite": 0,
+    "cacheRead": 0.15
+  },
+  "qwen": {
+    "input": 0.4,
+    "output": 1.2,
+    "cacheWrite": 0,
+    "cacheRead": 0.08
+  },
   "qwythos": {
     "input": 0,
     "output": 0,

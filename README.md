@@ -14,6 +14,22 @@
 | **[DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness)** (dsh) | `~/.dsh/sessions/**/session.jsonl.zstd` | 多 zstd frame 拼接，逐段解压（需内置 `node:zlib` zstd） |
 | **OpenCode** | `~/.local/share/opencode/opencode.db` | SQLite，内置 `node:sqlite` |
 | **Continue** (VSCode) | `~/.continue/dev_data/*/tokensGenerated.jsonl` | 逐请求 token 记录 |
+| **Reasonix** | `%APPDATA%/reasonix/projects/*/sessions/*.telemetry.json` | 整段会话用量汇总，模型名从文件名解析 |
+| **ZCode** | `~/.zcode/cli/rollout/model-io-*.jsonl` | 一行一次模型往返（单行可达数 MB） |
+
+### 本机 AI 工具探测 / Machine-wide tool detection
+
+除了上面这些「能读到用量」的数据源，面板还会扫描本机装了哪些 AI 工具，在「🔎 本机 AI 工具」卡片里分三档如实列出：
+
+| 状态 | 含义 |
+|---|---|
+| **已接入** | 有解析器且当前时间范围内有用量 |
+| **无近期用量** | 有解析器，但这段时间没用过 |
+| **未接入** | 装了但读不到用量，卡片上会写明原因（如 Kiro 的会话日志不含 token、Antigravity 是未公开的 protobuf、Copilot 不落本地用量日志） |
+
+探测表 `TOOLBOX`（在 `server.js` 里）目前覆盖 **39 个工具**：Claude Code、Codex、Gemini CLI、DeepSeek Harness、OpenCode、Continue、Reasonix、ZCode、Kiro、GitHub Copilot、Antigravity、Cline、Roo Code、Kilo Code、Cursor、Windsurf、Trae、Zed、Aider、Goose、Crush、Amp、Factory Droid、Qwen Code、iFlow、Cody、Augment、Ollama、VS Code、Claude Code Router、CC Switch、CLI Proxy API 等。加一个工具只要在 `TOOLBOX` 里加一行（工具名 + 候选目录），不需要写解析器。
+
+Beyond the parsed sources above, the dashboard scans for AI tools installed on your machine and lists them honestly in three states: **tracked** (parser + recent usage), **idle** (parser, no usage in range), **detected** (installed but no readable usage — the card states why). The `TOOLBOX` registry in `server.js` covers 39 tools; adding one is a single line (name + candidate paths), no parser needed.
 
 不存在的目录会自动跳过；面板上的数据源筛选按钮只显示实际有数据的工具。任何新模型（DeepSeek、Grok、本地模型……）只要出现在这些日志里就会自动显示，未配置定价时按 `default` 条目估算。
 

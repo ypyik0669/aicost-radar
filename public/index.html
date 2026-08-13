@@ -343,6 +343,18 @@
   .ach .ad { font-size: 10.5px; color: var(--tm); margin-top: 2px; line-height: 1.4; }
   #posterBtn { margin-left: 10px; padding: 4px 12px; font-size: 11px; }
 
+  /* 本机 AI 工具探测 */
+  .tools { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 8px; }
+  .tool { display: flex; align-items: center; gap: 9px; border: 1px solid var(--line); border-radius: 12px; padding: 9px 12px; background: var(--chip); }
+  .tool .tdot { width: 8px; height: 8px; border-radius: 50%; flex: none; background: var(--tm); }
+  .tool.tracked { border-color: rgba(34,211,238,.32); background: linear-gradient(180deg, rgba(34,211,238,.07), rgba(139,92,246,.04)); }
+  .tool.tracked .tdot { background: var(--cyan); box-shadow: 0 0 8px rgba(34,211,238,.8); }
+  .tool.idle .tdot { background: #64748b; }
+  .tool .tn { font-size: 12.5px; font-weight: 600; }
+  .tool .tk { font-size: 10.5px; color: var(--tm); margin-top: 1px; }
+  .tool .ts2 { margin-left: auto; font-size: 10px; color: var(--tm); white-space: nowrap; }
+  .tool.tracked .ts2 { color: var(--cyan); }
+
   /* 90天贡献图 */
   .contrib { display: flex; gap: 3px; padding: 4px 0; }
   .contrib .col { display: flex; flex-direction: column; gap: 3px; }
@@ -465,6 +477,11 @@
     <h2>🎯 趣味统计</h2>
     <div class="fun" id="funList"></div>
   </div>
+</div>
+
+<div class="card" id="toolCard">
+  <h2>🔎 本机 AI 工具 <span class="hint" id="toolHint"></span></h2>
+  <div class="tools" id="toolList"></div>
 </div>
 
 <div class="card" id="achCard">
@@ -708,6 +725,7 @@ function render() {
   })));
   renderCache();
   renderFun();
+  renderTools();
   renderSessions(sessions);
   $('status').textContent = '更新于 ' + fmtTime(DATA.generatedAt);
 }
@@ -1094,6 +1112,25 @@ function last5h() {
   return { sum, label: String(st.getHours()).padStart(2, '0') + ':00' };
 }
 
+// 本机装了哪些 AI 工具:tracked=已接入且有数据,idle=有解析器但这段时间没用,detected=装了但读不到用量
+function renderTools() {
+  const list = DATA.detected || [];
+  if (!list.length) { $('toolCard').style.display = 'none'; return; }
+  const rank = { tracked: 0, idle: 1, detected: 2 };
+  const sorted = [...list].sort((a, b) => (rank[a.status] - rank[b.status]) || a.name.localeCompare(b.name));
+  const nTracked = list.filter(t => t.status === 'tracked').length;
+  $('toolHint').textContent = `探测到 ${list.length} 个 · 已接入用量 ${nTracked} 个`;
+  const label = t => t.status === 'tracked' ? '已接入'
+    : t.status === 'idle' ? '无近期用量'
+    : t.note ? t.note : '未接入';
+  $('toolList').innerHTML = sorted.map(t => `
+    <div class="tool ${t.status}" title="${esc(t.note || '')}">
+      <span class="tdot"></span>
+      <div><div class="tn">${esc(t.name)}</div><div class="tk">${esc(t.kind)}</div></div>
+      <span class="ts2">${esc(label(t))}</span>
+    </div>`).join('');
+}
+
 function renderSessions(sessions) {
   $('sessBody').innerHTML = sessions.slice(0, 150).map((s, i) => {
     const dir = s.cwd ? s.cwd.split(/[\\/]/).filter(Boolean).pop() : '–';
@@ -1436,7 +1473,7 @@ $('posterBtn').addEventListener('click', () => {
 /* ---------- 卡片排序 + 显隐 ---------- */
 const BLOCKS = [
   ['chartCard', '每日成本图'], ['heatCard', '活动热力图'], ['cacheCard', '缓存效率'],
-  ['duoA', '模型 + 项目'], ['duoB', '命令 + 趣味'], ['achCard', '成就'],
+  ['duoA', '模型 + 项目'], ['duoB', '命令 + 趣味'], ['toolCard', '本机 AI 工具'], ['achCard', '成就'],
   ['contribCard', '90天贡献图'], ['sessCard', '会话记录'],
 ];
 let dragBlock = null;
