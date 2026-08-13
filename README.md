@@ -111,3 +111,5 @@ public/index.html 单文件前端（原生 JS + SVG，无框架无构建）
 ## License
 
 MIT
+
+Hero 背景图 / hero background photo: [Federico Respini on Unsplash](https://unsplash.com/photos/sYffw0LNr7s) ([Unsplash License](https://unsplash.com/license))
