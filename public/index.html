@@ -299,6 +299,70 @@
   .btn.primary { background: var(--grad); border-color: transparent; font-weight: 600; color: #fff; }
   #pmsg { font-size: 11px; margin-left: auto; }
 
+  /* 预算燃烧条 */
+  .budget { margin-top: 14px; max-width: 400px; }
+  .budget + .budget { margin-top: 8px; }
+  .budget .bl { display: flex; justify-content: space-between; font-size: 11px; color: var(--tm); margin-bottom: 5px; }
+  .budget .bt { height: 7px; border-radius: 4px; background: var(--track); overflow: hidden; }
+  .budget .bf { height: 100%; border-radius: 4px; background: var(--grad); transition: width .8s cubic-bezier(.3,.7,.3,1); }
+  .budget.warn .bf { background: linear-gradient(90deg, #fbbf24, #f59e0b); }
+  .budget.over .bf { background: linear-gradient(90deg, #f87171, #ef4444); }
+  .budget.over .bl { color: var(--bad); }
+  .hero.over .hero-num { text-shadow: 0 0 34px rgba(248,113,113,.38); }
+
+  /* 实时计价器 */
+  .meter { display: none; align-items: baseline; gap: 5px; font-size: 12px; color: var(--ts); font-variant-numeric: tabular-nums; }
+  .meter b { color: #fbbf24; font-size: 15px; font-weight: 700; }
+
+  /* 设置弹窗 tabs 与表单 */
+  .tabs { display: flex; gap: 4px; margin-bottom: 14px; border-bottom: 1px solid var(--line); padding-bottom: 8px; }
+  .tabs button { background: none; border: none; color: var(--ts); padding: 6px 14px; border-radius: 8px; cursor: pointer; font-family: inherit; font-size: 12.5px; }
+  .tabs button:hover { background: var(--chip-hover); }
+  .tabs button.on { background: var(--grad); color: #fff; font-weight: 600; }
+  .tabpane { display: none; }
+  .tabpane.on { display: block; }
+  .frow { display: flex; align-items: center; gap: 10px; padding: 7px 0; font-size: 12.5px; flex-wrap: wrap; }
+  .frow > label:first-child { width: 110px; color: var(--ts); flex: none; }
+  .frow input[type=text], .frow input[type=number], .frow select {
+    background: var(--chip); border: 1px solid var(--line); border-radius: 8px; color: var(--tp);
+    padding: 6px 9px; font-size: 12px; font-family: inherit; outline: none; width: 140px;
+  }
+  .frow input:focus, .frow select:focus { border-color: var(--cyan); }
+  .fnote { color: var(--tm); font-size: 11px; margin: 2px 0 8px; line-height: 1.5; }
+  .chkgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 6px; padding: 4px 0; }
+  .chkgrid label { display: flex; gap: 6px; align-items: center; font-size: 12px; color: var(--ts); cursor: pointer; }
+  .exports { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 8px; }
+
+  /* 成就徽章 */
+  .achgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 8px; }
+  .ach { border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; background: var(--chip); opacity: .42; filter: grayscale(1); transition: transform .2s, box-shadow .2s; }
+  .ach.on { opacity: 1; filter: none; border-color: rgba(34,211,238,.35); background: linear-gradient(180deg, rgba(34,211,238,.08), rgba(139,92,246,.05)); box-shadow: 0 0 18px rgba(34,211,238,.08); }
+  .ach.on:hover { transform: translateY(-2px); box-shadow: 0 6px 22px rgba(34,211,238,.14); }
+  .ach .ai { font-size: 20px; }
+  .ach .an { font-size: 12.5px; font-weight: 650; margin-top: 4px; }
+  .ach .ad { font-size: 10.5px; color: var(--tm); margin-top: 2px; line-height: 1.4; }
+  #posterBtn { margin-left: 10px; padding: 4px 12px; font-size: 11px; }
+
+  /* 90天贡献图 */
+  .contrib { display: flex; gap: 3px; padding: 4px 0; }
+  .contrib .col { display: flex; flex-direction: column; gap: 3px; }
+  .contrib .cell { width: 13px; height: 13px; border-radius: 3px; background: var(--track); }
+
+  /* 卡片拖拽排序 */
+  .dragh { cursor: grab; color: var(--tm); font-size: 13px; margin-right: 3px; user-select: none; }
+  .dragh:hover { color: var(--cyan); }
+  .dragging { opacity: .35; }
+
+  /* toast + confetti */
+  #toast {
+    position: fixed; left: 50%; bottom: 34px; transform: translateX(-50%) translateY(20px); z-index: 70;
+    background: linear-gradient(180deg, #1a2029, #12161e); border: 1px solid rgba(34,211,238,.4); border-radius: 12px;
+    padding: 11px 18px; font-size: 13px; font-weight: 600; opacity: 0; pointer-events: none;
+    box-shadow: 0 12px 40px rgba(0,0,0,.6), 0 0 24px rgba(34,211,238,.15); transition: opacity .3s, transform .3s;
+  }
+  #toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+  #confettiCv { position: fixed; inset: 0; z-index: 65; pointer-events: none; }
+
   @media (prefers-reduced-motion: reduce) {
     .dot.live { animation: none; }
     .rv { opacity: 1; transform: none; transition: none; }
@@ -336,15 +400,19 @@
     <div class="hero-line">
       <span class="hero-num" id="heroNum">$0</span>
       <span id="heroTrend"></span>
+      <span class="meter" id="meter">🔥 <b id="meterV"></b>/分钟</span>
     </div>
     <div class="hero-sub" id="heroSub"></div>
+    <div id="heroBudget"></div>
     <div class="hero-btns">
       <button class="hbtn primary" onclick="document.getElementById('sessCard').scrollIntoView({behavior:'smooth'})">💬 会话记录</button>
-      <button class="hbtn" onclick="openPricing()">⚙️ 自定义定价</button>
+      <button class="hbtn" onclick="openSettings('pref')">⚙️ 设置</button>
     </div>
   </div>
   <div class="fcards" id="fcards"></div>
 </section>
+
+<main id="cards">
 
 <div class="card" id="chartCard">
   <h2>📊 每日成本 · 按模型 <span class="hint">悬停查看明细</span></h2>
@@ -352,7 +420,7 @@
   <div class="legend" id="legend"></div>
 </div>
 
-<div class="card">
+<div class="card" id="heatCard">
   <h2>🕐 活动热力图 <span class="hint">什么时间烧钱最多（按小时成本）</span></h2>
   <div style="overflow-x:auto"><table class="heat" id="heat"></table></div>
 </div>
@@ -377,7 +445,7 @@
   </div>
 </div>
 
-<div class="duo">
+<div class="duo" id="duoA">
   <div class="card" id="modelCard">
     <h2>🤖 模型排行 <span class="hint" id="modelCount"></span></h2>
     <div id="modelList"></div>
@@ -388,7 +456,7 @@
   </div>
 </div>
 
-<div class="duo">
+<div class="duo" id="duoB">
   <div class="card">
     <h2>⌨️ 常用命令</h2>
     <div id="cmdList"></div>
@@ -397,6 +465,16 @@
     <h2>🎯 趣味统计</h2>
     <div class="fun" id="funList"></div>
   </div>
+</div>
+
+<div class="card" id="achCard">
+  <h2>🏆 成就 <span class="hint" id="achHint"></span><button class="btn" id="posterBtn">🎨 生成海报</button></h2>
+  <div class="achgrid" id="achGrid"><div class="muted">加载 90 天数据中…</div></div>
+</div>
+
+<div class="card" id="contribCard">
+  <h2>📅 90 天贡献图 <span class="hint">每格一天 · 颜色深浅 = 当日成本</span></h2>
+  <div style="overflow-x:auto"><div class="contrib" id="contrib"></div></div>
 </div>
 
 <div class="card" id="sessCard">
@@ -410,22 +488,62 @@
   </table>
 </div>
 
+</main>
+
+<div id="toast"></div>
 <div id="tip"></div>
 <div id="drawer"><button class="close" onclick="drawer.classList.remove('open')">✕</button><div id="drawerBody"></div></div>
 
 <div id="modal">
   <div class="mbox">
-    <h3>💲 自定义定价</h3>
-    <div class="mnote">单位：美元 / 百万 token。按模型名<b>子串匹配</b>，多条命中时取最长的那条；<b>default</b> 是兜底价，不可删除。保存后立即重算全部成本。</div>
-    <table class="ptab">
-      <thead><tr><th>匹配模式</th><th>输入</th><th>输出</th><th>缓存写</th><th>缓存读</th><th></th></tr></thead>
-      <tbody id="pBody"></tbody>
-    </table>
-    <div class="mbtns">
-      <button class="btn" id="pAdd">＋ 添加条目</button>
-      <button class="btn primary" id="pSave">保存</button>
-      <button class="btn" onclick="modal.classList.remove('open')">取消</button>
-      <span id="pmsg"></span>
+    <h3>⚙️ 设置</h3>
+    <div class="tabs" id="setTabs">
+      <button data-t="pref" class="on">偏好</button>
+      <button data-t="budget">预算</button>
+      <button data-t="price">定价</button>
+    </div>
+
+    <div class="tabpane on" data-p="pref">
+      <div class="frow"><label>显示货币</label>
+        <select id="sCurrency"><option value="USD">美元 $</option><option value="CNY">人民币 ¥</option></select>
+        <label style="width:auto;color:var(--tm)">汇率</label><input type="number" id="sRate" step="0.01" min="0" style="width:80px">
+      </div>
+      <div class="frow"><label>咖啡单价 ($)</label><input type="number" id="sCoffee" step="0.1" min="0.1"></div>
+      <div class="frow"><label>刷新间隔</label>
+        <select id="sRefresh"><option value="10">10 秒</option><option value="30">30 秒</option><option value="60">1 分钟</option><option value="120">2 分钟</option></select>
+      </div>
+      <div class="frow"><label>问候昵称</label><input type="text" id="sNick" placeholder="留空则不称呼"></div>
+      <div class="frow" style="align-items:flex-start"><label>显示卡片</label><div class="chkgrid" id="sCards"></div></div>
+      <div class="fnote">💡 卡片标题左侧的 ☰ 可以拖动调整顺序。</div>
+      <div class="frow" style="align-items:flex-start"><label>数据导出</label>
+        <div class="exports">
+          <button class="btn" id="expDaily">每日成本 CSV</button>
+          <button class="btn" id="expSess">会话 CSV</button>
+          <button class="btn" id="expJson">原始 JSON</button>
+        </div>
+      </div>
+      <div class="mbtns"><button class="btn primary" id="prefSave">保存偏好</button><span id="prefMsg"></span></div>
+    </div>
+
+    <div class="tabpane" data-p="budget">
+      <div class="fnote">预算以<b>美元</b>计(与成本口径一致),设为 0 表示不启用。达到 80% 变黄,超支变红并在 hero 上警告。</div>
+      <div class="frow"><label>月度预算 ($)</label><input type="number" id="sBudgetM" step="10" min="0"></div>
+      <div class="frow"><label>日度预算 ($)</label><input type="number" id="sBudgetD" step="10" min="0"></div>
+      <div class="mbtns"><button class="btn primary" id="budgetSave">保存预算</button><span id="budgetMsg"></span></div>
+    </div>
+
+    <div class="tabpane" data-p="price">
+      <div class="mnote">单位：美元 / 百万 token。按模型名<b>子串匹配</b>，多条命中时取最长的那条；<b>default</b> 是兜底价，不可删除。保存后立即重算全部成本。</div>
+      <table class="ptab">
+        <thead><tr><th>匹配模式</th><th>输入</th><th>输出</th><th>缓存写</th><th>缓存读</th><th></th></tr></thead>
+        <tbody id="pBody"></tbody>
+      </table>
+      <div class="mbtns">
+        <button class="btn" id="pAdd">＋ 添加条目</button>
+        <button class="btn primary" id="pSave">保存</button>
+        <button class="btn" onclick="modal.classList.remove('open')">取消</button>
+        <span id="pmsg"></span>
+      </div>
     </div>
   </div>
 </div>
@@ -433,7 +551,7 @@
 <script>
 const SLOTS = ['--series-1','--series-2','--series-3','--series-4','--series-5','--series-6','--series-7','--series-8'];
 const OTHER_COLOR = '#5f6b7d';
-const REFRESH_S = 30;
+let REFRESH_S = 30;
 let DATA = null, appFilter = 'all', days = 7, colorMap = new Map(), countdown = REFRESH_S;
 const $ = id => document.getElementById(id);
 const tip = $('tip'), drawer = $('drawer'), hero = $('hero');
@@ -441,7 +559,29 @@ const css = v => getComputedStyle(document.documentElement).getPropertyValue(v).
 const REDUCED = matchMedia('(prefers-reduced-motion: reduce)').matches;
 const FINE = matchMedia('(pointer:fine)').matches;
 
-function fmtCost(c) { return '$' + (c >= 1000 ? (c/1000).toFixed(2)+'k' : c >= 100 ? c.toFixed(0) : c >= 10 ? c.toFixed(1) : c.toFixed(2)); }
+/* ---------- 用户偏好(localStorage) ---------- */
+const DEFAULT_PREFS = {
+  currency: 'USD', rate: 7.25, coffeePrice: 2.5, refreshS: 30, nick: '',
+  budgetMonth: 0, budgetDay: 0,
+  cardOrder: [], hiddenCards: [],
+  records: { maxDayCost: 0, maxStreak: 0 }, unlockedAch: [], celebrated: {},
+};
+let prefs = { ...DEFAULT_PREFS };
+try {
+  const saved = JSON.parse(localStorage.getItem('aum_prefs') || '{}');
+  prefs = { ...DEFAULT_PREFS, ...saved, records: { ...DEFAULT_PREFS.records, ...(saved.records || {}) } };
+} catch {}
+function savePrefs() { localStorage.setItem('aum_prefs', JSON.stringify(prefs)); }
+REFRESH_S = +prefs.refreshS || 30;
+countdown = REFRESH_S;
+
+function fmtCost(c) {
+  if (prefs.currency === 'CNY') {
+    const y = c * (+prefs.rate || 7.25);
+    return '¥' + (y >= 10000 ? (y/10000).toFixed(2)+'w' : y >= 1000 ? (y/1000).toFixed(2)+'k' : y >= 100 ? y.toFixed(0) : y >= 10 ? y.toFixed(1) : y.toFixed(2));
+  }
+  return '$' + (c >= 1000 ? (c/1000).toFixed(2)+'k' : c >= 100 ? c.toFixed(0) : c >= 10 ? c.toFixed(1) : c.toFixed(2));
+}
 function fmtTok(t) {
   if (t >= 1e9) return (t/1e9).toFixed(2) + 'B';
   if (t >= 1e6) return (t/1e6).toFixed(1) + 'M';
@@ -458,7 +598,8 @@ function fmtTime(ts) {
 }
 function tokSum(u) { return u.in + u.cw + u.cr + u.out; }
 function esc(s) { return String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
-function coffee(c) { const n = c / 2.5; return n < 1 ? '' : '≈ ' + (n >= 100 ? Math.round(n) : n.toFixed(1)) + ' 杯咖啡'; }
+function coffee(c) { const n = c / (+prefs.coffeePrice || 2.5); return n < 1 ? '' : '≈ ' + (n >= 100 ? Math.round(n) : n.toFixed(1)) + ' 杯咖啡'; }
+function dstr(d) { return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0'); }
 
 function greeting() {
   const h = new Date().getHours();
@@ -574,8 +715,15 @@ function render() {
 /* ---------- Hero:问候 + 大数字 + 趋势徽章 + 漫游卡 ---------- */
 function renderHero(x) {
   const [g, gs] = greeting();
-  $('heroGreet').textContent = g + ' · ' + gs;
+  $('heroGreet').textContent = g + (prefs.nick ? ',' + prefs.nick : '') + ' · ' + gs;
   countTo($('heroNum'), x.todayCost, v => fmtCost(v));
+  // 计价器快照:两次刷新的差分 → $/分钟
+  if (meterSnap && DATA.generatedAt > meterSnap.at) {
+    const dtMin = (DATA.generatedAt - meterSnap.at) / 60000;
+    if (dtMin > 0.05) burnRate = Math.max(0, (x.todayCost - meterSnap.cost) / dtMin);
+  }
+  meterSnap = { cost: x.todayCost, at: DATA.generatedAt, activeN: x.activeN };
+  renderBudget();
   // vs 昨天趋势徽章
   const totals = x.daily.map(d => Object.values(d.byModel).reduce((a, u) => a + u.cost, 0));
   const ti = x.daily.findIndex(d => d.date === DATA.todayStr);
@@ -930,7 +1078,20 @@ function renderFun() {
     { fl: '👑 最贵会话', fv: s.maxSession ? fmtCost(s.maxSession.cost) : '–', fs: s.maxSession ? esc(s.maxSession.title.slice(0, 26)) : '' },
     { fl: '🦉 夜猫指数', fv: night + '%', fs: owl + '（0-6点占比）' },
     { fl: '✍️ 累计输入', fv: s.promptTotal + ' 条', fs: '外加 ' + s.cmdTotal + ' 条命令' },
+    (() => { const w = last5h(); return { fl: '⏱️ 近5小时', fv: fmtCost(w.sum), fs: w.label + ' 起 · 订阅限额窗口参考' }; })(),
   ].map(f => `<div class="funit"><div class="fl">${f.fl}</div><div class="fv">${f.fv}</div><div class="fs">${f.fs}</div></div>`).join('');
+}
+// 滚动 5 小时窗口成本(ccgauge 式,粗粒度按小时)
+function last5h() {
+  const now = new Date();
+  let sum = 0;
+  for (let i = 0; i < 5; i++) {
+    const d = new Date(now.getTime() - i * 3600000);
+    const arr = DATA.hourly[dstr(d)];
+    if (arr) sum += arr[d.getHours()] || 0;
+  }
+  const st = new Date(now.getTime() - 4 * 3600000);
+  return { sum, label: String(st.getHours()).padStart(2, '0') + ':00' };
 }
 
 function renderSessions(sessions) {
@@ -1015,6 +1176,337 @@ for (const [segId, setter] of [['appSeg', v => appFilter = v], ['daySeg', v => {
   });
 }
 
+/* ---------- 实时烧钱计价器 ---------- */
+let meterSnap = null, burnRate = 0; // $/分钟
+setInterval(() => {
+  if (!DATA || !meterSnap) return;
+  const active = meterSnap.activeN > 0 && burnRate > 0.0001;
+  $('meter').style.display = active ? 'inline-flex' : 'none';
+  if (active) {
+    $('meterV').textContent = fmtCost(burnRate);
+    // 出租车跳表:按速率外推今日成本
+    const extra = burnRate * (Date.now() - meterSnap.at) / 60000;
+    $('heroNum').textContent = fmtCost(meterSnap.cost + extra);
+  }
+}, 1000);
+
+/* ---------- 预算燃烧条(用 90 天全量数据算本月/今日) ---------- */
+function renderBudget() {
+  const el = $('heroBudget');
+  const src = ACH || DATA;
+  if (!src) { el.innerHTML = ''; return; }
+  const bars = [];
+  const bm = +prefs.budgetMonth || 0, bd = +prefs.budgetDay || 0;
+  const sumDay = d => { let c = 0; for (const ms of Object.values(d.byApp)) for (const u of Object.values(ms)) c += u.cost; return c; };
+  if (bm > 0) {
+    const ym = src.todayStr.slice(0, 7);
+    let spent = 0;
+    for (const d of src.daily) if (d.date.startsWith(ym)) spent += sumDay(d);
+    bars.push({ name: '本月预算', spent, budget: bm });
+  }
+  if (bd > 0) {
+    const today = src.daily.find(d => d.date === src.todayStr);
+    bars.push({ name: '今日预算', spent: today ? sumDay(today) : 0, budget: bd });
+  }
+  hero.classList.toggle('over', bars.some(b => b.spent / b.budget >= 1));
+  el.innerHTML = bars.map(b => {
+    const r = b.spent / b.budget;
+    const cls = r >= 1 ? 'over' : r >= .8 ? 'warn' : '';
+    return `<div class="budget ${cls}">
+      <div class="bl"><span>${b.name}${r >= 1 ? ' · 已超支 🔥' : ''}</span><span>${fmtCost(b.spent)} / ${fmtCost(b.budget)} · ${(r * 100).toFixed(0)}%</span></div>
+      <div class="bt"><div class="bf" style="width:${Math.min(100, r * 100).toFixed(1)}%"></div></div>
+    </div>`;
+  }).join('');
+}
+
+/* ---------- toast + confetti ---------- */
+function toast(msg) {
+  const t = $('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  clearTimeout(toast._t);
+  toast._t = setTimeout(() => t.classList.remove('show'), 4200);
+}
+function confetti() {
+  if (REDUCED) return;
+  let cv = $('confettiCv');
+  if (cv) cv.remove();
+  cv = document.createElement('canvas');
+  cv.id = 'confettiCv';
+  cv.width = innerWidth; cv.height = innerHeight;
+  document.body.appendChild(cv);
+  const g = cv.getContext('2d');
+  const colors = ['#22d3ee', '#8b5cf6', '#34d399', '#fbbf24', '#f87171', '#f4f6fb'];
+  const ps = Array.from({ length: 140 }, () => ({
+    x: innerWidth / 2 + (Math.random() - .5) * 220, y: innerHeight * .35,
+    vx: (Math.random() - .5) * 14, vy: -Math.random() * 13 - 4,
+    s: Math.random() * 7 + 4, r: Math.random() * Math.PI, vr: (Math.random() - .5) * .3,
+    c: colors[Math.floor(Math.random() * colors.length)],
+  }));
+  const t0 = performance.now();
+  (function step(t) {
+    const dt = 1, life = (t - t0) / 3000;
+    g.clearRect(0, 0, cv.width, cv.height);
+    for (const p of ps) {
+      p.vy += .28 * dt; p.x += p.vx * dt; p.y += p.vy * dt; p.r += p.vr;
+      g.save(); g.translate(p.x, p.y); g.rotate(p.r);
+      g.globalAlpha = Math.max(0, 1 - life);
+      g.fillStyle = p.c; g.fillRect(-p.s / 2, -p.s / 2, p.s, p.s * .6);
+      g.restore();
+    }
+    if (life < 1) requestAnimationFrame(step);
+    else cv.remove();
+  })(t0);
+}
+function celebrate(msg) { toast(msg); confetti(); }
+
+/* ---------- 成就系统 + 90天贡献图(独立拉 90 天全量) ---------- */
+let ACH = null;
+function achHourShare(a, from, to) {
+  let part = 0, total = 0;
+  for (const arr of Object.values(a.hourly)) arr.forEach((v, h) => { total += v; if (h >= from && h < to) part += v; });
+  return total > 0 ? part / total : 0;
+}
+function achCacheRate(a) {
+  let inn = 0, cw = 0, cr = 0;
+  for (const m of a.models) for (const u of Object.values(m.byApp)) { inn += u.in; cw += u.cw; cr += u.cr; }
+  const den = inn + cw + cr;
+  return den > 0 ? cr / den : 0;
+}
+const ACH_DEFS = [
+  { id: 'day1k',   icon: '⚔️', name: '千刀万刃',   desc: '单日烧掉超过 $1000',        test: a => (a.stats.maxDay?.cost || 0) >= 1000 },
+  { id: 'spend10k',icon: '💎', name: '氪金战士',   desc: '90 天累计超过 $10k',        test: a => a.totals.all.cost >= 10000 },
+  { id: 'owl',     icon: '🦉', name: '夜猫王',     desc: '深夜(0-6点)成本占比 >30%',  test: a => a.stats.nightShare > .3 },
+  { id: 'bird',    icon: '🐦', name: '早鸟',       desc: '清晨(6-9点)成本占比 >15%',  test: a => achHourShare(a, 6, 9) > .15 },
+  { id: 'cache',   icon: '🧊', name: '缓存大师',   desc: '整体缓存命中率 >95%',       test: a => achCacheRate(a) > .95 },
+  { id: 'streak7', icon: '🔥', name: '全勤打工人', desc: '连续活跃 ≥7 天',            test: a => a.stats.streak >= 7 },
+  { id: 'tools3',  icon: '🔱', name: '铁人三项',   desc: '同时使用 ≥3 个 AI 工具',    test: a => (a.apps || []).length >= 3 },
+  { id: 'models5', icon: '🎭', name: '百模大战',   desc: '用过 ≥5 个不同模型',        test: a => a.models.length >= 5 },
+  { id: 'tok1b',   icon: '🌌', name: '亿级玩家',   desc: '90 天 tokens 总量 >1B',     test: a => (a.totals.all.in + a.totals.all.cw + a.totals.all.cr + a.totals.all.out) >= 1e9 },
+  { id: 'sess100', icon: '👑', name: '最贵一单',   desc: '单个会话花费超过 $100',     test: a => (a.stats.maxSession?.cost || 0) >= 100 },
+  { id: 'chatty',  icon: '✍️', name: '话痨',       desc: '累计输入超过 500 条',       test: a => a.stats.promptTotal >= 500 },
+  { id: 'cmder',   icon: '⌨️', name: '命令行侠',   desc: '累计斜杠命令超过 200 条',   test: a => a.stats.cmdTotal >= 200 },
+];
+function renderAchievements() {
+  if (!ACH) return;
+  const unlocked = ACH_DEFS.filter(d => { try { return d.test(ACH); } catch { return false; } }).map(d => d.id);
+  const fresh = unlocked.filter(id => !prefs.unlockedAch.includes(id));
+  if (fresh.length && prefs.unlockedAch.length) {
+    const d = ACH_DEFS.find(x => x.id === fresh[0]);
+    celebrate(`🏆 解锁成就「${d.icon} ${d.name}」${fresh.length > 1 ? ` 等 ${fresh.length} 项` : ''}!`);
+  }
+  if (fresh.length) { prefs.unlockedAch = [...new Set([...prefs.unlockedAch, ...unlocked])]; savePrefs(); }
+  $('achHint').textContent = `已解锁 ${unlocked.length} / ${ACH_DEFS.length} · 按近 90 天数据`;
+  $('achGrid').innerHTML = ACH_DEFS.map(d => `
+    <div class="ach${unlocked.includes(d.id) ? ' on' : ''}" title="${esc(d.desc)}">
+      <div class="ai">${d.icon}</div><div class="an">${d.name}</div><div class="ad">${d.desc}</div>
+    </div>`).join('');
+}
+function contribColor(v, max) {
+  if (v <= 0.001) return 'rgba(255,255,255,.06)';
+  const t = Math.sqrt(v / max);
+  const lo = [30, 52, 66], hi = [34, 211, 238];
+  const c = lo.map((l, i) => Math.round(l + (hi[i] - l) * t));
+  return `rgb(${c[0]},${c[1]},${c[2]})`;
+}
+function renderContrib() {
+  if (!ACH) return;
+  const byDate = new Map();
+  const sumDay = d => { let c = 0; for (const ms of Object.values(d.byApp)) for (const u of Object.values(ms)) c += u.cost; return c; };
+  for (const d of ACH.daily) byDate.set(d.date, sumDay(d));
+  const max = Math.max(0.01, ...byDate.values());
+  const today = new Date();
+  // 对齐到 13 周前的周一
+  const start = new Date(today.getTime() - 89 * 86400000);
+  start.setDate(start.getDate() - (start.getDay() + 6) % 7);
+  let html = '';
+  for (let w = 0; ; w++) {
+    let col = '';
+    let colHas = false;
+    for (let dow = 0; dow < 7; dow++) {
+      const d = new Date(start.getTime() + (w * 7 + dow) * 86400000);
+      if (d > today) { col += `<div class="cell" style="visibility:hidden"></div>`; continue; }
+      colHas = true;
+      const ds = dstr(d), v = byDate.get(ds) || 0;
+      col += `<div class="cell" style="background:${contribColor(v, max)}" data-d="${ds}" data-v="${v.toFixed(2)}"></div>`;
+    }
+    if (!colHas) break;
+    html += `<div class="col">${col}</div>`;
+    if (w > 20) break;
+  }
+  $('contrib').innerHTML = html;
+}
+$('contrib').addEventListener('mousemove', ev => {
+  const c = ev.target.closest('.cell[data-d]');
+  if (!c) return hideTip();
+  showTip(ev, `<div class="t">${c.dataset.d}</div><div class="r"><span>成本</span><b>${fmtCost(+c.dataset.v)}</b></div>`);
+});
+$('contrib').addEventListener('mouseleave', hideTip);
+
+function checkRecords() {
+  if (!ACH) return;
+  const md = ACH.stats.maxDay, st = ACH.stats.streak;
+  const r = prefs.records;
+  let changed = false;
+  if (md && md.cost > (r.maxDayCost || 0) + 0.01) {
+    if (r.maxDayCost > 0) celebrate(`🎉 单日成本新纪录 ${fmtCost(md.cost)}!`);
+    r.maxDayCost = md.cost; changed = true;
+  }
+  if (st > (r.maxStreak || 0)) {
+    if (r.maxStreak > 0 && st >= 3) celebrate(`🔥 连续活跃新纪录 ${st} 天!`);
+    r.maxStreak = st; changed = true;
+  }
+  if (changed) savePrefs();
+}
+async function loadAch() {
+  try {
+    ACH = await (await fetch('/api/data?days=90')).json();
+    renderAchievements();
+    renderContrib();
+    checkRecords();
+    renderBudget();
+  } catch {}
+}
+loadAch();
+setInterval(loadAch, 10 * 60 * 1000);
+
+/* ---------- Wrapped 分享海报(canvas) ---------- */
+$('posterBtn').addEventListener('click', () => {
+  if (!ACH) return toast('90 天数据还没就绪,稍等一下');
+  const W = 1080, H = 1350;
+  const cv = document.createElement('canvas');
+  cv.width = W; cv.height = H;
+  const g = cv.getContext('2d');
+  const bg = g.createLinearGradient(0, 0, 0, H);
+  bg.addColorStop(0, '#0c1019'); bg.addColorStop(1, '#0a0d12');
+  g.fillStyle = bg; g.fillRect(0, 0, W, H);
+  for (const [x, y, c] of [[W * .85, 180, '34,211,238'], [W * .1, H * .8, '139,92,246']]) {
+    const rg = g.createRadialGradient(x, y, 0, x, y, 420);
+    rg.addColorStop(0, `rgba(${c},.16)`); rg.addColorStop(1, 'rgba(0,0,0,0)');
+    g.fillStyle = rg; g.fillRect(0, 0, W, H);
+  }
+  const FONT = '"Segoe UI", "Microsoft YaHei", sans-serif';
+  g.fillStyle = '#9aa4b5'; g.font = `600 34px ${FONT}`;
+  g.fillText('我的 AI · 过去 90 天', 80, 120);
+  const t = ACH.totals.all;
+  const grad = g.createLinearGradient(80, 0, 760, 0);
+  grad.addColorStop(0, '#22d3ee'); grad.addColorStop(1, '#8b5cf6');
+  g.fillStyle = grad; g.font = `800 148px ${FONT}`;
+  g.fillText(fmtCost(t.cost), 76, 290);
+  g.fillStyle = '#5f6b7d'; g.font = `500 26px ${FONT}`;
+  g.fillText('总成本' + (coffee(t.cost) ? ' · ' + coffee(t.cost) : ''), 80, 340);
+  const rows = [
+    ['🔢 Tokens 总量', fmtTok(t.in + t.cw + t.cr + t.out)],
+    ['🧊 缓存帮我省了', fmtCost(ACH.stats.savedByCache)],
+    ['🔥 连续活跃', ACH.stats.streak + ' 天'],
+    ['🦉 夜猫指数', (ACH.stats.nightShare * 100).toFixed(0) + '%'],
+    ['💸 最烧的一天', ACH.stats.maxDay ? `${fmtCost(ACH.stats.maxDay.cost)} (${ACH.stats.maxDay.date.slice(5)})` : '–'],
+    ['🏆 解锁成就', prefs.unlockedAch.length + ' / ' + ACH_DEFS.length],
+  ];
+  rows.forEach(([k, v], i) => {
+    const y = 460 + i * 92;
+    g.fillStyle = '#9aa4b5'; g.font = `500 30px ${FONT}`; g.fillText(k, 80, y);
+    g.fillStyle = '#f4f6fb'; g.font = `700 40px ${FONT}`; g.fillText(v, 500, y);
+  });
+  g.fillStyle = '#9aa4b5'; g.font = `600 30px ${FONT}`;
+  g.fillText('🤖 Top 模型', 80, 1070);
+  const top3 = ACH.models.slice(0, 3);
+  const maxC = Math.max(0.01, ...top3.map(m => m.cost));
+  top3.forEach((m, i) => {
+    const y = 1105 + i * 62;
+    g.fillStyle = '#f4f6fb'; g.font = `600 28px ${FONT}`;
+    g.fillText(m.model.slice(0, 24), 80, y + 20);
+    const bw = 380 * (m.cost / maxC);
+    g.fillStyle = grad; g.beginPath(); g.roundRect(500, y, Math.max(8, bw), 26, 13); g.fill();
+    g.fillStyle = '#9aa4b5'; g.font = `600 26px ${FONT}`;
+    g.fillText(fmtCost(m.cost), 510 + Math.max(8, bw), y + 21);
+  });
+  g.fillStyle = '#5f6b7d'; g.font = `500 24px ${FONT}`;
+  g.fillText('AI 用量监控 · ai-usage-monitor', 80, H - 60);
+  cv.toBlob(b => {
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(b);
+    a.download = 'ai-usage-wrapped.png';
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+    toast('🎨 海报已生成,看下载目录');
+  });
+});
+
+/* ---------- 卡片排序 + 显隐 ---------- */
+const BLOCKS = [
+  ['chartCard', '每日成本图'], ['heatCard', '活动热力图'], ['cacheCard', '缓存效率'],
+  ['duoA', '模型 + 项目'], ['duoB', '命令 + 趣味'], ['achCard', '成就'],
+  ['contribCard', '90天贡献图'], ['sessCard', '会话记录'],
+];
+let dragBlock = null;
+function applyLayout() {
+  const main = $('cards');
+  const order = [...(prefs.cardOrder || [])].filter(id => $(id));
+  for (const [id] of BLOCKS) if (!order.includes(id)) order.push(id);
+  for (const id of order) main.appendChild($(id));
+  for (const [id] of BLOCKS) $(id).style.display = (prefs.hiddenCards || []).includes(id) ? 'none' : '';
+}
+function initDrag() {
+  for (const [id] of BLOCKS) {
+    const h2 = $(id).querySelector('h2');
+    if (!h2 || h2.querySelector('.dragh')) continue;
+    const s = document.createElement('span');
+    s.className = 'dragh'; s.textContent = '☰'; s.title = '拖动调整顺序'; s.draggable = true;
+    h2.prepend(s);
+    s.addEventListener('dragstart', e => {
+      dragBlock = $(id);
+      dragBlock.classList.add('dragging');
+      e.dataTransfer.setData('text/plain', id);
+      e.dataTransfer.effectAllowed = 'move';
+    });
+    s.addEventListener('dragend', () => {
+      if (!dragBlock) return;
+      dragBlock.classList.remove('dragging');
+      dragBlock = null;
+      prefs.cardOrder = [...$('cards').children].map(c => c.id).filter(Boolean);
+      savePrefs();
+    });
+  }
+  $('cards').addEventListener('dragover', e => {
+    if (!dragBlock) return;
+    e.preventDefault();
+    const others = [...$('cards').children].filter(c => c !== dragBlock);
+    const after = others.find(b => e.clientY < b.getBoundingClientRect().top + b.offsetHeight / 2);
+    $('cards').insertBefore(dragBlock, after || null);
+  });
+}
+applyLayout();
+initDrag();
+
+/* ---------- 数据导出 ---------- */
+function dl(name, text, mime) {
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob(['﻿' + text], { type: mime }));
+  a.download = name; a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+}
+function csvEsc(s) { s = String(s ?? ''); return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s; }
+$('expDaily').addEventListener('click', () => {
+  if (!DATA) return;
+  const rows = ['date,app,model,input,cacheWrite,cacheRead,output,costUSD'];
+  for (const d of DATA.daily) for (const [app, ms] of Object.entries(d.byApp)) for (const [m, u] of Object.entries(ms))
+    rows.push([d.date, app, csvEsc(m), u.in, u.cw, u.cr, u.out, u.cost.toFixed(4)].join(','));
+  dl(`ai-usage-daily-${DATA.todayStr}.csv`, rows.join('\n'), 'text/csv');
+});
+$('expSess').addEventListener('click', () => {
+  if (!DATA) return;
+  const rows = ['app,sessionId,agent,cwd,start,end,models,prompts,commands,tokens,costUSD,title'];
+  for (const s of DATA.sessions)
+    rows.push([s.app, s.id, s.agent, csvEsc(s.cwd), s.start ? new Date(s.start).toISOString() : '', s.end ? new Date(s.end).toISOString() : '',
+      csvEsc(s.models.join('|')), s.promptCount, s.cmdCount, tokSum(s.u), s.u.cost.toFixed(4), csvEsc(s.title)].join(','));
+  dl(`ai-usage-sessions-${DATA.todayStr}.csv`, rows.join('\n'), 'text/csv');
+});
+$('expJson').addEventListener('click', () => {
+  if (!DATA) return;
+  dl(`ai-usage-${DATA.todayStr}.json`, JSON.stringify(DATA, null, 2), 'application/json');
+});
+
 // ---- 定价编辑器 ----
 const modal = $('modal');
 let pComment = '';
@@ -1026,17 +1518,66 @@ function pRowHtml(k, v, isDefault) {
     <td>${isDefault ? '' : '<button class="del" title="删除">✕</button>'}</td>
   </tr>`;
 }
-async function openPricing() {
+async function loadPricingTable() {
   try {
     const p = await (await fetch('/api/pricing')).json();
     pComment = p._comment || '';
     const keys = Object.keys(p).filter(k => !k.startsWith('_') && k !== 'default');
     $('pBody').innerHTML = keys.map(k => pRowHtml(k, p[k], false)).join('') + pRowHtml('default', p.default || {}, true);
     $('pmsg').textContent = '';
-    modal.classList.add('open');
-  } catch (e) { alert('读取定价失败: ' + e.message); }
+  } catch (e) { toast('读取定价失败: ' + e.message); }
 }
-$('gearBtn').addEventListener('click', openPricing);
+function setTab(t) {
+  [...$('setTabs').children].forEach(b => b.classList.toggle('on', b.dataset.t === t));
+  document.querySelectorAll('.tabpane').forEach(p => p.classList.toggle('on', p.dataset.p === t));
+}
+$('setTabs').addEventListener('click', e => {
+  const b = e.target.closest('button');
+  if (b) setTab(b.dataset.t);
+});
+function openSettings(tab = 'pref') {
+  // 偏好回填
+  $('sCurrency').value = prefs.currency;
+  $('sRate').value = prefs.rate;
+  $('sCoffee').value = prefs.coffeePrice;
+  $('sRefresh').value = String(prefs.refreshS);
+  $('sNick').value = prefs.nick;
+  $('sCards').innerHTML = BLOCKS.map(([id, name]) =>
+    `<label><input type="checkbox" data-card="${id}" ${(prefs.hiddenCards || []).includes(id) ? '' : 'checked'}> ${name}</label>`).join('');
+  $('sBudgetM').value = prefs.budgetMonth || '';
+  $('sBudgetD').value = prefs.budgetDay || '';
+  $('prefMsg').textContent = ''; $('budgetMsg').textContent = '';
+  loadPricingTable();
+  setTab(tab);
+  modal.classList.add('open');
+}
+function openPricing() { openSettings('price'); }
+$('gearBtn').addEventListener('click', () => openSettings('pref'));
+$('prefSave').addEventListener('click', () => {
+  prefs.currency = $('sCurrency').value;
+  prefs.rate = Math.max(0.01, parseFloat($('sRate').value) || 7.25);
+  prefs.coffeePrice = Math.max(0.1, parseFloat($('sCoffee').value) || 2.5);
+  prefs.refreshS = parseInt($('sRefresh').value, 10) || 30;
+  prefs.nick = $('sNick').value.trim().slice(0, 20);
+  prefs.hiddenCards = [...$('sCards').querySelectorAll('input[data-card]')].filter(c => !c.checked).map(c => c.dataset.card);
+  savePrefs();
+  REFRESH_S = prefs.refreshS;
+  countdown = Math.min(countdown, REFRESH_S);
+  applyLayout();
+  if (DATA) render();
+  renderBudget();
+  $('prefMsg').textContent = '✓ 已保存'; $('prefMsg').style.color = 'var(--good)';
+  setTimeout(() => $('prefMsg').textContent = '', 1500);
+});
+$('budgetSave').addEventListener('click', () => {
+  prefs.budgetMonth = Math.max(0, parseFloat($('sBudgetM').value) || 0);
+  prefs.budgetDay = Math.max(0, parseFloat($('sBudgetD').value) || 0);
+  savePrefs();
+  renderBudget();
+  $('budgetMsg').textContent = '✓ 已保存'; $('budgetMsg').style.color = 'var(--good)';
+  setTimeout(() => $('budgetMsg').textContent = '', 1500);
+});
+if (location.hash === '#settings') setTimeout(() => openSettings('pref'), 300);
 $('pAdd').addEventListener('click', () => {
   $('pBody').insertAdjacentHTML('afterbegin', pRowHtml('', { input: 0, output: 0, cacheWrite: 0, cacheRead: 0 }, false));
   $('pBody').querySelector('.pk').focus();
