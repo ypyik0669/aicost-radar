@@ -1,4 +1,4 @@
-// AI Usage Monitor —— 扫描本地 AI 编程工具的会话记录，聚合模型/成本/命令数据
+// AIcost Radar —— 扫描本地 AI 编程工具的会话记录，聚合模型/成本/命令数据
 // 数据源插件化：每个源实现 list()+parse() 或 load()，详见 SOURCES 注册表
 'use strict';
 const http = require('http');

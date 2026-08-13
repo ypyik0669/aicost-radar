@@ -1,8 +1,8 @@
-# AI Usage Monitor 📟
+# AIcost Radar 📟
 
-本地 AI 编程工具用量监控面板 —— 零依赖、纯本地、单文件前端。自动扫描各工具留在本机的会话日志，聚合出模型、成本、token、缓存命中率、会话记录等数据，用一个流体玻璃风格的深色面板展示。
+本地 AI 编程工具用量雷达 —— 零依赖、纯本地、单文件前端。自动扫描 Claude Code、Codex、Gemini CLI、OpenCode、Continue 留在本机的会话日志，聚合出模型、成本、token、缓存命中率、会话记录，用一个暗色发光风格的面板展示。数据不出本机。
 
-**A local usage & cost dashboard for AI coding tools.** Zero dependencies, fully offline, single-file frontend. It scans the session logs that AI coding tools already write to your machine and aggregates models, costs, tokens, cache hit rate, and per-session history into a fluid-glass dark dashboard. *(English notes inline below.)*
+**A local usage & cost radar for AI coding tools.** Zero dependencies, fully offline, single-file frontend. It scans the session logs that Claude Code, Codex, Gemini CLI, OpenCode and Continue already write to your machine, and aggregates models, costs, tokens, cache hit rate and per-session history into a dark glow dashboard. Nothing leaves your machine. *(English notes inline below.)*
 
 ## 支持的数据源 / Supported sources
 
@@ -21,6 +21,8 @@ Sources that don't exist on your machine are skipped automatically. Any new mode
 ## 快速开始 / Quick start
 
 ```bash
+git clone https://github.com/ypyik0669/aicost-radar.git
+cd aicost-radar
 node server.js        # 或 npm start
 # 打开 http://127.0.0.1:38765
 ```
