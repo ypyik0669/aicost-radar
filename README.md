@@ -1,8 +1,8 @@
 # AIcost Radar 📟
 
-本地 AI 编程工具用量雷达 —— 零依赖、纯本地、单文件前端。自动扫描 Claude Code、Codex、Gemini CLI、DeepSeek Harness、OpenCode、Continue 留在本机的会话日志，聚合出模型、成本、token、缓存命中率、会话记录，用一个暗色发光风格的面板展示。数据不出本机。
+本地 AI 编程工具用量雷达 —— 零依赖、纯本地、单文件前端。自动扫描 Claude Code、Codex、Gemini CLI、DeepSeek Harness、OpenCode、Continue、Reasonix、ZCode 留在本机的会话日志，聚合出模型、成本、token、缓存命中率、会话记录，用一个暗色发光风格的面板展示。还能**跨工具搜历史**、算**订阅回本**、出**省钱诊断**。数据不出本机。
 
-**A local usage & cost radar for AI coding tools.** Zero dependencies, fully offline, single-file frontend. It scans the session logs that Claude Code, Codex, Gemini CLI, DeepSeek Harness, OpenCode and Continue already write to your machine, and aggregates models, costs, tokens, cache hit rate and per-session history into a dark glow dashboard. Nothing leaves your machine. *(English notes inline below.)*
+**A local usage & cost radar for AI coding tools.** Zero dependencies, fully offline, single-file frontend. It scans the session logs that eight AI coding tools already write to your machine and aggregates models, costs, tokens, cache hit rate and per-session history into a dark glow dashboard — plus cross-tool history search, subscription break-even tracking, and savings diagnostics. Nothing leaves your machine. *(English notes inline below.)*
 
 ## 支持的数据源 / Supported sources
 
@@ -74,6 +74,49 @@ Node.js ≥ 22.15 (built-in `node:sqlite` for OpenCode, built-in zstd for DeepSe
 - 📅 **90 天贡献图**：GitHub 风格活动格子
 - ⏱️ **近 5 小时窗口**：粗粒度参考订阅限额节奏
 
+## 四件别处没有的事 / Four things you won't find elsewhere
+
+这四项针对的是同类工具普遍留下的空白：Cherry Studio 之类的客户端到今天仍没有内置费用统计（[CherryHQ/cherry-studio#5890](https://github.com/CherryHQ/cherry-studio/issues/5890)），跨工具找历史要靠人肉回忆，订阅到底回没回本全靠感觉。
+
+### 🔍 跨工具历史搜索
+
+顶栏搜索框（`Ctrl/⌘+K` 聚焦）一次搜遍**所有已接入工具**的历史输入与命令，90 天范围内。结果里除了来源、时间、工作目录和高亮片段，还带**这次会话花了多少钱**——这是纯搜索工具给不了的维度。点任意结果直接展开该会话全文。
+
+One search box across every tool's history, with the cost of each matching session attached. `Ctrl/⌘+K` to focus.
+
+### 💳 订阅回本卡
+
+在 ⚙️ 设置 → 订阅里登记多条订阅（`名称 + 月费 + 覆盖哪些工具`，比如 Claude Max 20x $200 覆盖 Claude Code、中转包月覆盖 Codex）。卡片按**自然月**统计这些工具的 API 等价成本，画出回本进度条：
+
+- 未回本 → 「还差 $Z，日均需 $W」
+- 已回本 → 「多赚 $Y」
+- 底部合计净赚 / 净亏，并单列没被任何订阅覆盖的**按量付费**部分
+
+Register multiple stacked subscriptions and see, per calendar month, whether each one has paid for itself in API-equivalent cost.
+
+### 🩺 省钱诊断
+
+基于已解析的会话数据给出**可执行**建议，每条附估算可省金额，按金额排序，可点进具体会话核查：
+
+| 检查 | 判定 |
+|---|---|
+| 🧊 缓存命中异常低 | 命中率低于该工具中位数一半且成本 > $0.5 |
+| 🎈 上下文膨胀 | 平均每轮输入 > 80k token（建议 `/compact` 或新开会话） |
+| 💸 小任务用了贵模型 | 1–2 条输入、输出 < 2k token 却用了最贵档模型 |
+| 🛸 高成本无人值守 | 成本 > $5 但没有人工输入且消息数 ≥ 20 |
+
+阈值全部写在卡片文案里，不做黑箱建议。
+
+Actionable savings diagnostics with an estimated dollar figure per finding; every threshold is stated in the card rather than hidden.
+
+### 📦 历史归档 + 失控告警
+
+各家工具都会自己轮转、裁剪甚至删除日志，历史统计因此会凭空缩水。面板把每天的 token 明细写进 `data/archive.json`（只存 token，成本随定价实时重算），日志消失后仍能补回图表，这些天在图上以半透明区分。
+
+告警走浏览器通知（需在设置里手动开启）+ 面板内 toast：烧钱速率异常（> 近 7 天日均分钟成本的 3 倍）、预算 80% / 100% 触线，同类告警 30 分钟内只提醒一次。
+
+Daily token history is archived locally so rotated-away logs don't shrink your stats; burn-rate spikes and budget thresholds raise a desktop notification (opt-in) plus an in-page toast.
+
 ## 自定义定价 / Custom pricing
 
 定价存在 `pricing.json`，单位是**美元 / 百万 token**，按**模型名子串匹配**（多条命中取最长）。可以直接改文件，也可以在面板里点 ⚙️ 编辑，两种方式等价：
@@ -131,11 +174,14 @@ Everything stays on your machine: the server binds to `127.0.0.1` only, reads lo
 ## 架构 / Architecture
 
 ```
-server.js        零依赖 Node HTTP 服务：数据源扫描、解析缓存、聚合、定价 API
-pricing.json     定价表（面板内可编辑）
+server.js         零依赖 Node HTTP 服务：数据源扫描、解析缓存、聚合、搜索、定价 API
+pricing.json      定价表（面板内可编辑）
 public/index.html 单文件前端（原生 JS + SVG，无框架无构建）
-启动监控.vbs      Windows 一键启动器
+data/archive.json 每日 token 归档（自动生成，已 gitignore，删掉会自动重建）
+启动监控.vbs       Windows 一键启动器
 ```
+
+HTTP 接口 / Endpoints：`GET /api/data?days=`（聚合数据）、`GET /api/search?q=&days=&limit=`（跨工具搜索）、`GET|POST /api/pricing`（定价热更新）。
 
 大文件（>512MB 的 JSONL）走分块流式逐行解析；全局按 `messageId:requestId` 去重，避免多文件重复计费。
 

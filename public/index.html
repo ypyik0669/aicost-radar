@@ -343,6 +343,57 @@
   .ach .ad { font-size: 10.5px; color: var(--tm); margin-top: 2px; line-height: 1.4; }
   #posterBtn { margin-left: 10px; padding: 4px 12px; font-size: 11px; }
 
+  /* 跨工具搜索 */
+  .searchbox { position: relative; flex: 1 1 220px; min-width: 170px; max-width: 420px; }
+  .searchbox input {
+    width: 100%; background: var(--chip); border: 1px solid var(--line); border-radius: 10px;
+    color: var(--tp); padding: 7px 11px 7px 30px; font-size: 12.5px; font-family: inherit; outline: none;
+    transition: border-color .18s, background .18s;
+  }
+  .searchbox input:focus { border-color: rgba(34,211,238,.5); background: rgba(34,211,238,.05); }
+  .searchbox input::placeholder { color: var(--tm); }
+  .searchbox .si { position: absolute; left: 10px; top: 50%; transform: translateY(-50%); color: var(--tm); font-size: 12px; pointer-events: none; }
+  #sres {
+    position: absolute; top: calc(100% + 8px); left: 0; width: min(680px, 92vw); z-index: 45; display: none;
+    background: linear-gradient(180deg, #171c26, #10141b); border: 1px solid var(--line-strong); border-radius: 14px;
+    box-shadow: 0 24px 60px rgba(0,0,0,.6), inset 0 1px 0 rgba(255,255,255,.06);
+    max-height: 62vh; overflow-y: auto; padding: 6px;
+  }
+  #sres.open { display: block; }
+  #sres .shead { font-size: 11px; color: var(--tm); padding: 7px 10px 8px; border-bottom: 1px solid var(--line); }
+  .sr { padding: 9px 10px; border-radius: 10px; cursor: pointer; transition: background .12s; }
+  .sr:hover { background: rgba(34,211,238,.07); }
+  .sr .srtop { display: flex; align-items: center; gap: 8px; font-size: 10.5px; color: var(--tm); margin-bottom: 4px; flex-wrap: wrap; }
+  .sr .srcost { margin-left: auto; color: var(--cyan); font-variant-numeric: tabular-nums; }
+  .sr .srtx { font-size: 12px; color: var(--ts); line-height: 1.5; word-break: break-word; }
+  .sr .srtx mark { background: rgba(34,211,238,.22); color: var(--tp); border-radius: 3px; padding: 0 2px; }
+
+  /* 订阅回本 */
+  .subrow { padding: 10px 0; border-bottom: 1px solid var(--line); }
+  .subrow:last-child { border-bottom: none; }
+  .subrow .sl { display: flex; align-items: baseline; gap: 8px; font-size: 12.5px; margin-bottom: 6px; flex-wrap: wrap; }
+  .subrow .sl b { font-weight: 650; }
+  .subrow .sl .sright { margin-left: auto; font-variant-numeric: tabular-nums; color: var(--ts); }
+  .subrow .sbt { height: 8px; border-radius: 4px; background: var(--track); overflow: hidden; }
+  .subrow .sbf { height: 100%; border-radius: 4px; background: var(--grad); transition: width .8s cubic-bezier(.3,.7,.3,1); }
+  .subrow.win .sbf { background: linear-gradient(90deg, #34d399, #22d3ee); }
+  .subrow .sn { font-size: 10.5px; color: var(--tm); margin-top: 5px; }
+  .subrow .sn b.good { color: var(--good); }
+  .subrow .sn b.bad { color: var(--bad); }
+  .subtotal { margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--line-strong); font-size: 12px; color: var(--ts); }
+
+  /* 省钱诊断 */
+  .diag { display: flex; flex-direction: column; gap: 8px; }
+  .dg { border: 1px solid var(--line); border-radius: 12px; padding: 11px 13px; background: var(--chip); }
+  .dg .dh { display: flex; align-items: center; gap: 8px; font-size: 12.5px; font-weight: 650; }
+  .dg .dsave { margin-left: auto; color: #fbbf24; font-variant-numeric: tabular-nums; font-size: 13px; }
+  .dg .dd { font-size: 11px; color: var(--tm); margin-top: 5px; line-height: 1.55; }
+  .dg .dlist { margin-top: 8px; display: flex; flex-direction: column; gap: 4px; }
+  .dg .di { display: flex; gap: 8px; font-size: 11px; color: var(--ts); cursor: pointer; padding: 4px 6px; border-radius: 7px; }
+  .dg .di:hover { background: rgba(34,211,238,.08); }
+  .dg .di .dic { margin-left: auto; font-variant-numeric: tabular-nums; color: var(--tm); }
+  .dgok { color: var(--good); font-size: 12px; padding: 8px 2px; }
+
   /* 本机 AI 工具探测 */
   .tools { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 8px; }
   .tool { display: flex; align-items: center; gap: 9px; border: 1px solid var(--line); border-radius: 12px; padding: 9px 12px; background: var(--chip); }
@@ -386,6 +437,11 @@
 
 <nav class="topbar">
   <div class="brand">📟 <b>AI 用量监控</b><span id="status"></span></div>
+  <div class="searchbox">
+    <span class="si">🔍</span>
+    <input id="sq" type="text" placeholder="搜索所有工具的历史对话…  Ctrl+K" autocomplete="off">
+    <div id="sres"></div>
+  </div>
   <div class="seg" id="appSeg">
     <button data-v="all" class="on">全部</button>
   </div>
@@ -479,6 +535,16 @@
   </div>
 </div>
 
+<div class="card" id="subCard">
+  <h2>💳 订阅回本 <span class="hint" id="subHint"></span></h2>
+  <div id="subList"></div>
+</div>
+
+<div class="card" id="diagCard">
+  <h2>🩺 省钱诊断 <span class="hint" id="diagHint"></span></h2>
+  <div class="diag" id="diagList"></div>
+</div>
+
 <div class="card" id="toolCard">
   <h2>🔎 本机 AI 工具 <span class="hint" id="toolHint"></span></h2>
   <div class="tools" id="toolList"></div>
@@ -517,6 +583,7 @@
     <div class="tabs" id="setTabs">
       <button data-t="pref" class="on">偏好</button>
       <button data-t="budget">预算</button>
+      <button data-t="subs">订阅</button>
       <button data-t="price">定价</button>
     </div>
 
@@ -532,6 +599,11 @@
       <div class="frow"><label>问候昵称</label><input type="text" id="sNick" placeholder="留空则不称呼"></div>
       <div class="frow" style="align-items:flex-start"><label>显示卡片</label><div class="chkgrid" id="sCards"></div></div>
       <div class="fnote">💡 卡片标题左侧的 ☰ 可以拖动调整顺序。</div>
+      <div class="frow"><label>桌面通知</label>
+        <button class="btn" id="notifyBtn">开启桌面通知</button>
+        <span class="muted" id="notifyState" style="font-size:11px"></span>
+      </div>
+      <div class="fnote">开启后，烧钱速率异常飙升或预算触线时会弹系统通知（同类告警 30 分钟内只提醒一次）。</div>
       <div class="frow" style="align-items:flex-start"><label>数据导出</label>
         <div class="exports">
           <button class="btn" id="expDaily">每日成本 CSV</button>
@@ -547,6 +619,16 @@
       <div class="frow"><label>月度预算 ($)</label><input type="number" id="sBudgetM" step="10" min="0"></div>
       <div class="frow"><label>日度预算 ($)</label><input type="number" id="sBudgetD" step="10" min="0"></div>
       <div class="mbtns"><button class="btn primary" id="budgetSave">保存预算</button><span id="budgetMsg"></span></div>
+    </div>
+
+    <div class="tabpane" data-p="subs">
+      <div class="fnote">填上你的月度订阅，面板会用<b>当月 API 等价花费</b>算回本进度：花超过月费 = 订阅赚了；长期不到 = 按量付费更划算。每条订阅勾选它覆盖哪些数据源。</div>
+      <div id="subEdit"></div>
+      <div class="mbtns">
+        <button class="btn" id="subAdd">＋ 添加订阅</button>
+        <button class="btn primary" id="subSave">保存订阅</button>
+        <span id="subMsg"></span>
+      </div>
     </div>
 
     <div class="tabpane" data-p="price">
@@ -598,6 +680,11 @@ function fmtCost(c) {
     return '¥' + (y >= 10000 ? (y/10000).toFixed(2)+'w' : y >= 1000 ? (y/1000).toFixed(2)+'k' : y >= 100 ? y.toFixed(0) : y >= 10 ? y.toFixed(1) : y.toFixed(2));
   }
   return '$' + (c >= 1000 ? (c/1000).toFixed(2)+'k' : c >= 100 ? c.toFixed(0) : c >= 10 ? c.toFixed(1) : c.toFixed(2));
+}
+function pctOf(part, whole) {
+  if (!(whole > 0)) return '占比未知';
+  const p = part / whole * 100;
+  return '约 ' + (p < 0.1 ? '<0.1' : p < 10 ? p.toFixed(1) : p.toFixed(0)) + '% 的总花费';
 }
 function fmtTok(t) {
   if (t >= 1e9) return (t/1e9).toFixed(2) + 'B';
@@ -725,6 +812,8 @@ function render() {
   })));
   renderCache();
   renderFun();
+  renderSubs();
+  renderDiag();
   renderTools();
   renderSessions(sessions);
   $('status').textContent = '更新于 ' + fmtTime(DATA.generatedAt);
@@ -742,6 +831,7 @@ function renderHero(x) {
   }
   meterSnap = { cost: x.todayCost, at: DATA.generatedAt, activeN: x.activeN };
   renderBudget();
+  checkAlarms(x);
   // vs 昨天趋势徽章
   const totals = x.daily.map(d => Object.values(d.byModel).reduce((a, u) => a + u.cost, 0));
   const ti = x.daily.findIndex(d => d.date === DATA.todayStr);
@@ -998,11 +1088,15 @@ function renderChart(daily) {
       return (ia < 0 ? 99 : ia) - (ib < 0 ? 99 : ib);
     });
     const segs = ordered.map(([m, u]) => ({ m, u, h: u.cost / maxCost * plotH })).filter(s => s.h >= 0.5);
+    // 来自归档（原始日志已被工具清掉）的天数画淡一点，让人知道数据出处不同
+    const fromArchive = (DATA.archivedDates || []).includes(d.date);
     segs.forEach((s, j) => {
       const gap = j < segs.length - 1 ? 2 : 0;
       const h = Math.max(1, s.h - gap);
       y -= s.h;
-      svg.appendChild(el('rect', { x, y, width: bw, height: h, fill: colorOf(s.m), rx: j === segs.length - 1 ? 3 : 0 }));
+      const r = el('rect', { x, y, width: bw, height: h, fill: colorOf(s.m), rx: j === segs.length - 1 ? 3 : 0 });
+      if (fromArchive) r.setAttribute('opacity', '.55');
+      svg.appendChild(r);
     });
     if (daily.length <= 10 || i % Math.ceil(daily.length / 8) === 0) {
       const t = el('text', { x: x + bw / 2, y: H - 5, 'text-anchor': 'middle', fill: css('--tm'), 'font-size': 10 });
@@ -1020,10 +1114,31 @@ function renderChart(daily) {
     svg.appendChild(hit);
   });
 
+  const others = DATA.models.slice(8);
   $('legend').innerHTML = [...colorMap.entries()]
-    .map(([m, c]) => `<span><i style="background:${c}"></i>${esc(m)}</span>`).join('') +
-    (DATA.models.length > 8 ? `<span><i style="background:${OTHER_COLOR}"></i>其他 ${DATA.models.length - 8} 个</span>` : '');
+    .map(([m, c]) => `<span data-m="${esc(m)}"><i style="background:${c}"></i>${esc(m)}</span>`).join('') +
+    (others.length ? `<span data-others="1" style="cursor:help"><i style="background:${OTHER_COLOR}"></i>其他 ${others.length} 个 ⓘ</span>` : '');
 }
+// 图例 hover：单个模型看总量，「其他 N 个」展开被折叠的模型清单
+$('legend').addEventListener('mousemove', ev => {
+  const sp = ev.target.closest('span[data-m], span[data-others]');
+  if (!sp || !DATA) return hideTip();
+  if (sp.dataset.others) {
+    const others = DATA.models.slice(8);
+    const rows = others.slice(0, 12).map(m =>
+      `<div class="r"><span><i style="background:${OTHER_COLOR}"></i>${esc(m.model)}</span><b>${fmtCost(m.cost)}</b></div>`).join('');
+    const rest = others.length > 12 ? `<div class="r muted">…另有 ${others.length - 12} 个</div>` : '';
+    const sum = others.reduce((a, m) => a + m.cost, 0);
+    showTip(ev, `<div class="t">其他 ${others.length} 个模型 · 合计 ${fmtCost(sum)}</div>${rows}${rest}`);
+  } else {
+    const m = DATA.models.find(x => x.model === sp.dataset.m);
+    if (!m) return hideTip();
+    const apps = Object.entries(m.byApp).map(([a, u]) =>
+      `<div class="r"><span>${esc(appName(a))}</span><b>${fmtCost(u.cost)}</b></div>`).join('');
+    showTip(ev, `<div class="t">${esc(m.model)} · ${fmtCost(m.cost)}</div><div class="r"><span>Tokens</span><b>${fmtTok(m.tokens)}</b></div>${apps}`);
+  }
+});
+$('legend').addEventListener('mouseleave', hideTip);
 
 // 热力图冰蓝单色渐变
 function heatColor(v, max) {
@@ -1110,6 +1225,197 @@ function last5h() {
   }
   const st = new Date(now.getTime() - 4 * 3600000);
   return { sum, label: String(st.getHours()).padStart(2, '0') + ':00' };
+}
+
+/* ---------- 跨工具历史搜索 ---------- */
+let sTimer = null, sLast = '';
+function hlEsc(text, q) {
+  const terms = q.toLowerCase().split(/\s+/).filter(Boolean);
+  let html = esc(text);
+  for (const t of terms) {
+    const re = new RegExp('(' + t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + ')', 'gi');
+    html = html.replace(re, '<mark>$1</mark>');
+  }
+  return html;
+}
+async function runSearch(q) {
+  const box = $('sres');
+  if (!q.trim()) { box.classList.remove('open'); return; }
+  try {
+    const r = await (await fetch('/api/search?q=' + encodeURIComponent(q) + '&days=90&limit=60')).json();
+    if (r.q !== sLast) return; // 慢响应别覆盖新查询
+    const rows = r.results.map((h, i) => `
+      <div class="sr" data-i="${i}">
+        <div class="srtop">
+          <span class="app-tag ${h.agent ? 'agent' : h.app}">${esc(h.agent ? '子代理' : appName(h.app))}</span>
+          <span>${fmtTime(h.ts)}</span>
+          <span>${esc((h.cwd || '').split(/[\\/]/).filter(Boolean).pop() || '')}</span>
+          <span>${esc(h.models.slice(0, 2).join(', '))}</span>
+          <span class="srcost">${fmtCost(h.sessionCost)}</span>
+        </div>
+        <div class="srtx">${hlEsc(h.snippet, q)}</div>
+      </div>`).join('');
+    box.innerHTML = `<div class="shead">在 ${(DATA && DATA.apps.length) || 0} 个工具的 90 天历史里找到 ${r.results.length} 条${r.results.length >= 60 ? '（只显示前 60 条）' : ''} · 点击查看完整会话</div>`
+      + (rows || '<div class="sr muted">没有匹配的历史对话</div>');
+    box.classList.add('open');
+    [...box.querySelectorAll('.sr[data-i]')].forEach(el => el.addEventListener('click', () => {
+      const h = r.results[+el.dataset.i];
+      box.classList.remove('open');
+      openDrawer({ app: h.app, id: h.id, cwd: h.cwd, models: h.models, u: { in: 0, cw: 0, cr: 0, out: h.sessionTokens, cost: h.sessionCost } });
+    }));
+  } catch (e) { box.innerHTML = `<div class="sr muted">搜索失败: ${esc(e.message)}</div>`; box.classList.add('open'); }
+}
+$('sq').addEventListener('input', e => {
+  sLast = e.target.value;
+  clearTimeout(sTimer);
+  sTimer = setTimeout(() => runSearch(sLast), 300);
+});
+$('sq').addEventListener('focus', () => { if ($('sres').innerHTML && sLast.trim()) $('sres').classList.add('open'); });
+document.addEventListener('click', e => {
+  if (!e.target.closest('.searchbox')) $('sres').classList.remove('open');
+});
+document.addEventListener('keydown', e => {
+  if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') { e.preventDefault(); $('sq').focus(); $('sq').select(); }
+});
+
+/* ---------- 订阅回本 ---------- */
+function monthKey(s) { return s.slice(0, 7); }
+function renderSubs() {
+  const src = ACH || DATA;
+  const subs = prefs.subs || [];
+  if (!src) return;
+  if (!subs.length) {
+    $('subHint').textContent = '还没配置订阅';
+    $('subList').innerHTML = `<div class="muted" style="padding:6px 0;line-height:1.7">在 ⚙️ 设置 → 订阅 里填上你的月费（比如 Claude Max $200 / 中转包月），面板会按<b>当月 API 等价花费</b>算出回本进度：花超过月费就是赚了，反之说明按量付费更划算。<br><button class="btn" style="margin-top:8px" onclick="openSettings('subs')">去配置订阅</button></div>`;
+    return;
+  }
+  const ym = monthKey(src.todayStr);
+  const dayOfMonth = +src.todayStr.slice(8, 10);
+  const daysInMonth = new Date(+ym.slice(0, 4), +ym.slice(5, 7), 0).getDate();
+  // 本月每个数据源的 API 等价成本
+  const byApp = {};
+  for (const d of src.daily) {
+    if (monthKey(d.date) !== ym) continue;
+    for (const [app, models] of Object.entries(d.byApp))
+      for (const u of Object.values(models)) byApp[app] = (byApp[app] || 0) + u.cost;
+  }
+  const covered = new Set();
+  let subTotal = 0, apiTotal = 0;
+  const rows = subs.map(s => {
+    const apps = s.apps || [];
+    apps.forEach(a => covered.add(a));
+    const api = apps.reduce((a, id) => a + (byApp[id] || 0), 0);
+    const fee = +s.monthlyUSD || 0;
+    subTotal += fee; apiTotal += api;
+    const pct = fee > 0 ? api / fee * 100 : 0;
+    const win = pct >= 100;
+    const needDaily = fee > 0 ? Math.max(0, fee - api) / Math.max(1, daysInMonth - dayOfMonth + 1) : 0;
+    return `<div class="subrow ${win ? 'win' : ''}">
+      <div class="sl"><b>${esc(s.name || '订阅')}</b>
+        <span class="muted">${apps.map(a => esc(appName(a))).join(' + ') || '未指定数据源'}</span>
+        <span class="sright">${fmtCost(api)} / ${fmtCost(fee)}</span></div>
+      <div class="sbt"><div class="sbf" style="width:${Math.min(100, pct).toFixed(1)}%"></div></div>
+      <div class="sn">${win
+        ? `已回本 ${pct.toFixed(0)}% · 相当于白赚 <b class="good">${fmtCost(api - fee)}</b>`
+        : `回本 ${pct.toFixed(0)}% · 还差 <b class="bad">${fmtCost(fee - api)}</b>，本月剩余 ${daysInMonth - dayOfMonth + 1} 天日均需 ${fmtCost(needDaily)}`}</div>
+    </div>`;
+  }).join('');
+  const payg = Object.entries(byApp).filter(([a]) => !covered.has(a));
+  const paygTotal = payg.reduce((a, [, c]) => a + c, 0);
+  const net = apiTotal - subTotal;
+  $('subHint').textContent = ym + ' · 按当月 API 等价花费计算';
+  $('subList').innerHTML = rows + `<div class="subtotal">
+    订阅月费合计 <b>${fmtCost(subTotal)}</b> · 覆盖范围 API 等价 <b>${fmtCost(apiTotal)}</b> ·
+    ${net >= 0 ? `净赚 <b style="color:var(--good)">${fmtCost(net)}</b>` : `净亏 <b style="color:var(--bad)">${fmtCost(-net)}</b>（按量付费更划算）`}
+    ${payg.length ? `<br><span class="muted">未被订阅覆盖（按量付费）：${payg.map(([a, c]) => esc(appName(a)) + ' ' + fmtCost(c)).join(' · ')} = ${fmtCost(paygTotal)}</span>` : ''}
+  </div>`;
+}
+
+/* ---------- 省钱诊断 ---------- */
+const DIAG = { lowCacheCost: 0.5, ctxPerMsg: 80000, bigSessionCost: 5, smallOut: 2000 };
+function renderDiag() {
+  if (!DATA) return;
+  const sess = DATA.sessions.filter(s => s.u.cost > 0.01);
+  const items = [];
+  // 1) 缓存失效:和同工具中位命中率比,差多少
+  const rateOf = s => { const den = s.u.in + s.u.cw + s.u.cr; return den > 0 ? s.u.cr / den : 0; };
+  const byApp = {};
+  for (const s of sess) (byApp[s.app] = byApp[s.app] || []).push(s);
+  const lowCache = [];
+  let cacheSave = 0;
+  for (const [app, list] of Object.entries(byApp)) {
+    const rates = list.map(rateOf).sort((a, b) => a - b);
+    const med = rates[Math.floor(rates.length / 2)] || 0;
+    if (med < 0.3) continue; // 该工具整体就没缓存,不作要求
+    for (const s of list) {
+      const r = rateOf(s);
+      if (r >= med * 0.5 || s.u.cost < DIAG.lowCacheCost) continue;
+      // 把本可命中的那部分输入按缓存价重算,估算差额
+      const den = s.u.in + s.u.cw + s.u.cr;
+      const shouldCr = den * med;
+      const gap = Math.max(0, shouldCr - s.u.cr);
+      const save = gap * 0.9 / 1e6 * 3; // 保守:按 $3/M 输入与缓存读的价差估
+      if (save < 0.01) continue;
+      cacheSave += save;
+      lowCache.push({ s, note: `命中率 ${(r * 100).toFixed(0)}%（同工具中位 ${(med * 100).toFixed(0)}%）`, save });
+    }
+  }
+  if (lowCache.length) items.push({
+    icon: '🧊', title: '缓存命中异常低', save: cacheSave,
+    desc: `这些会话的缓存命中率不到同工具中位值的一半。常见诱因：会话中途换模型、改动工具集/MCP、系统提示里带时间戳——任何前缀变化都会让整段缓存作废，后续每轮都按全价重算。`,
+    list: lowCache.sort((a, b) => b.save - a.save).slice(0, 6),
+  });
+  // 2) 上下文膨胀
+  const fat = sess.filter(s => s.msgCount >= 3 && (s.u.in + s.u.cr) / s.msgCount > DIAG.ctxPerMsg)
+    .map(s => ({ s, note: `平均每轮 ${fmtTok(Math.round((s.u.in + s.u.cr) / s.msgCount))} 输入`, save: 0 }));
+  if (fat.length) items.push({
+    icon: '🎈', title: '上下文膨胀', save: 0,
+    desc: `平均每轮输入超过 ${fmtTok(DIAG.ctxPerMsg)}，说明历史越滚越长。及时 /compact 或开新会话，能显著降低后续每轮的输入成本。`,
+    list: fat.sort((a, b) => b.s.u.cost - a.s.u.cost).slice(0, 6),
+  });
+  // 3) 贵模型跑小任务
+  const priceRank = new Map(DATA.models.map((m, i) => [m.model, i]));
+  const cheapest = [...DATA.models].filter(m => m.tokens > 1000).sort((a, b) => (a.cost / Math.max(1, a.tokens)) - (b.cost / Math.max(1, b.tokens)))[0];
+  // 子代理天生就没有人工输入，不能按"小任务"论处
+  const overkill = sess.filter(s => !s.agent && s.promptCount >= 1 && s.promptCount <= 2 &&
+    s.u.out < DIAG.smallOut && s.u.cost > 0.3 &&
+    s.models.some(m => (priceRank.get(m) ?? 99) <= 2))
+    .map(s => ({ s, note: `${s.promptCount} 条输入 · 输出仅 ${fmtTok(s.u.out)}`, save: s.u.cost * 0.6 }));
+  if (overkill.length) items.push({
+    icon: '🐘', title: '小任务用了贵模型', save: overkill.reduce((a, x) => a + x.save, 0),
+    desc: `一两句话的小活儿跑在最贵档模型上${cheapest ? `。同样的量换成 ${esc(cheapest.model)} 大约只要四成成本` : ''}。估算按省 60% 计。`,
+    list: overkill.sort((a, b) => b.save - a.save).slice(0, 6),
+  });
+  // 4) 长时间自动运行:高成本 + 零人工输入 + 轮次很多(排除子代理,它本来就没人工输入)
+  const runaway = sess.filter(s => !s.agent && s.u.cost > DIAG.bigSessionCost && s.promptCount === 0 && s.msgCount >= 20)
+    .map(s => ({ s, note: `${s.msgCount} 轮全自动 · 无人工输入`, save: 0 }));
+  if (runaway.length) items.push({
+    icon: '🏃', title: '长时间无人工输入的高成本会话', save: 0,
+    desc: `成本超过 ${fmtCost(DIAG.bigSessionCost)}、跑了 20 轮以上却没有记录到人工输入。可能是自动循环跑飞，也可能是从旧会话恢复（输入记在上一个文件里），点开核对一下。`,
+    list: runaway.sort((a, b) => b.s.u.cost - a.s.u.cost).slice(0, 6),
+  });
+
+  const total = items.reduce((a, x) => a + x.save, 0);
+  const rangeCost = DATA.sessions.reduce((a, s) => a + s.u.cost, 0);
+  $('diagHint').textContent = items.length
+    ? `${days} 天内发现 ${items.length} 类问题${total > 0.01 ? ` · 潜在可省 ${fmtCost(total)}（${pctOf(total, rangeCost)}）` : ''}`
+    : '当前范围内没发现明显浪费';
+  $('diagList').innerHTML = items.length ? items.sort((a, b) => b.save - a.save).map(it => `
+    <div class="dg">
+      <div class="dh">${it.icon} ${it.title}${it.save > 0.01 ? `<span class="dsave">≈ 可省 ${fmtCost(it.save)}</span>` : `<span class="dsave" style="color:var(--tm)">${it.list.length} 个会话</span>`}</div>
+      <div class="dd">${it.desc}</div>
+      <div class="dlist">${it.list.map(x => `
+        <div class="di" data-sid="${esc(x.s.app)}::${esc(x.s.id)}">
+          <span class="app-tag ${x.s.agent ? 'agent' : x.s.app}">${esc(x.s.agent ? '子代理' : appName(x.s.app))}</span>
+          <span class="ellip" style="max-width:230px">${esc(x.s.title)}</span>
+          <span class="dic">${esc(x.note)} · ${fmtCost(x.s.u.cost)}</span>
+        </div>`).join('')}</div>
+    </div>`).join('') : '<div class="dgok">✅ 没发现明显的浪费，保持这个状态</div>';
+  [...$('diagList').querySelectorAll('.di[data-sid]')].forEach(el => el.addEventListener('click', () => {
+    const [app, id] = el.dataset.sid.split('::');
+    const s = DATA.sessions.find(x => x.app === app && x.id === id);
+    if (s) openDrawer(s);
+  }));
 }
 
 // 本机装了哪些 AI 工具:tracked=已接入且有数据,idle=有解析器但这段时间没用,detected=装了但读不到用量
@@ -1473,14 +1779,24 @@ $('posterBtn').addEventListener('click', () => {
 /* ---------- 卡片排序 + 显隐 ---------- */
 const BLOCKS = [
   ['chartCard', '每日成本图'], ['heatCard', '活动热力图'], ['cacheCard', '缓存效率'],
-  ['duoA', '模型 + 项目'], ['duoB', '命令 + 趣味'], ['toolCard', '本机 AI 工具'], ['achCard', '成就'],
+  ['duoA', '模型 + 项目'], ['duoB', '命令 + 趣味'], ['subCard', '订阅回本'], ['diagCard', '省钱诊断'],
+  ['toolCard', '本机 AI 工具'], ['achCard', '成就'],
   ['contribCard', '90天贡献图'], ['sessCard', '会话记录'],
 ];
 let dragBlock = null;
 function applyLayout() {
   const main = $('cards');
   const order = [...(prefs.cardOrder || [])].filter(id => $(id));
-  for (const [id] of BLOCKS) if (!order.includes(id)) order.push(id);
+  // 新版本新增的卡片要插到它在 BLOCKS 里的默认位置，直接 push 会垫到最底下没人看见
+  BLOCKS.forEach(([id], i) => {
+    if (order.includes(id)) return;
+    let at = order.length;
+    for (let j = i - 1; j >= 0; j--) {
+      const prev = order.indexOf(BLOCKS[j][0]);
+      if (prev >= 0) { at = prev + 1; break; }
+    }
+    order.splice(at, 0, id);
+  });
   for (const id of order) main.appendChild($(id));
   for (const [id] of BLOCKS) $(id).style.display = (prefs.hiddenCards || []).includes(id) ? 'none' : '';
 }
@@ -1572,6 +1888,86 @@ $('setTabs').addEventListener('click', e => {
   const b = e.target.closest('button');
   if (b) setTab(b.dataset.t);
 });
+/* ---------- 订阅编辑 ---------- */
+function subRowHtml(s) {
+  const apps = (DATA && DATA.apps) || [];
+  return `<div class="frow subedit" style="align-items:center">
+    <input type="text" class="sname" value="${esc(s.name || '')}" placeholder="订阅名称" style="width:150px">
+    <input type="number" class="sfee" value="${s.monthlyUSD || ''}" placeholder="月费 $" step="1" min="0" style="width:90px">
+    <div class="chkgrid" style="flex:1">${apps.map(a =>
+      `<label><input type="checkbox" class="sapp" data-a="${esc(a.id)}" ${(s.apps || []).includes(a.id) ? 'checked' : ''}> ${esc(a.name)}</label>`).join('')}</div>
+    <button class="del" title="删除">✕</button>
+  </div>`;
+}
+function fillSubs() {
+  const subs = (prefs.subs && prefs.subs.length) ? prefs.subs
+    : [{ name: 'Claude Max 20x', monthlyUSD: 200, apps: ['claude'] }];
+  $('subEdit').innerHTML = subs.map(subRowHtml).join('');
+}
+function collectSubs() {
+  return [...document.querySelectorAll('#subEdit .subedit')].map(r => ({
+    name: r.querySelector('.sname').value.trim() || '订阅',
+    monthlyUSD: parseFloat(r.querySelector('.sfee').value) || 0,
+    apps: [...r.querySelectorAll('.sapp')].filter(c => c.checked).map(c => c.dataset.a),
+  })).filter(s => s.monthlyUSD > 0);
+}
+$('subAdd').addEventListener('click', () => {
+  $('subEdit').insertAdjacentHTML('beforeend', subRowHtml({ name: '', monthlyUSD: '', apps: [] }));
+});
+$('subEdit').addEventListener('click', e => {
+  const b = e.target.closest('.del');
+  if (b) b.closest('.subedit').remove();
+});
+$('subSave').addEventListener('click', () => {
+  prefs.subs = collectSubs();
+  savePrefs();
+  renderSubs();
+  $('subMsg').textContent = '✓ 已保存'; $('subMsg').style.color = 'var(--good)';
+  setTimeout(() => $('subMsg').textContent = '', 1500);
+});
+
+/* ---------- 桌面告警 ---------- */
+function notifyState() {
+  const st = typeof Notification === 'undefined' ? '浏览器不支持'
+    : Notification.permission === 'granted' ? '已开启'
+    : Notification.permission === 'denied' ? '已被浏览器拒绝' : '未开启';
+  $('notifyState').textContent = st;
+}
+$('notifyBtn').addEventListener('click', async () => {
+  if (typeof Notification === 'undefined') return;
+  await Notification.requestPermission();
+  notifyState();
+  if (Notification.permission === 'granted') new Notification('AIcost Radar', { body: '通知已开启，超预算或烧钱飙升时会提醒你' });
+});
+function alarm(key, title, body) {
+  const now = Date.now();
+  prefs.alerts = prefs.alerts || {};
+  if (now - (prefs.alerts[key] || 0) < 30 * 60 * 1000) return; // 同类 30 分钟内只报一次
+  prefs.alerts[key] = now;
+  savePrefs();
+  toast('⚠️ ' + title + ' · ' + body);
+  try {
+    if (typeof Notification !== 'undefined' && Notification.permission === 'granted')
+      new Notification('⚠️ ' + title, { body, tag: key });
+  } catch {}
+}
+function checkAlarms(x) {
+  // 烧钱速率异常:超过近 7 天日均折合分钟成本的 3 倍(且有下限,免得小额误报)
+  const avgPerMin = x.avgDaily / 1440;
+  if (burnRate > Math.max(avgPerMin * 3, 0.5))
+    alarm('burn', '烧钱速率异常', `当前 ${fmtCost(burnRate)}/分钟，是近${days}天均值的 ${(burnRate / Math.max(avgPerMin, 1e-6)).toFixed(1)} 倍`);
+  // 预算触线
+  const bm = +prefs.budgetMonth || 0;
+  if (bm > 0 && ACH) {
+    const ym = ACH.todayStr.slice(0, 7);
+    let spent = 0;
+    for (const d of ACH.daily) if (d.date.startsWith(ym))
+      for (const ms of Object.values(d.byApp)) for (const u of Object.values(ms)) spent += u.cost;
+    if (spent >= bm) alarm('budget100', '本月预算已超支', `已花 ${fmtCost(spent)} / 预算 ${fmtCost(bm)}`);
+    else if (spent >= bm * 0.8) alarm('budget80', '本月预算已用 80%', `已花 ${fmtCost(spent)} / 预算 ${fmtCost(bm)}`);
+  }
+}
+
 function openSettings(tab = 'pref') {
   // 偏好回填
   $('sCurrency').value = prefs.currency;
@@ -1583,7 +1979,9 @@ function openSettings(tab = 'pref') {
     `<label><input type="checkbox" data-card="${id}" ${(prefs.hiddenCards || []).includes(id) ? '' : 'checked'}> ${name}</label>`).join('');
   $('sBudgetM').value = prefs.budgetMonth || '';
   $('sBudgetD').value = prefs.budgetDay || '';
-  $('prefMsg').textContent = ''; $('budgetMsg').textContent = '';
+  fillSubs();
+  notifyState();
+  $('prefMsg').textContent = ''; $('budgetMsg').textContent = ''; $('subMsg').textContent = '';
   loadPricingTable();
   setTab(tab);
   modal.classList.add('open');

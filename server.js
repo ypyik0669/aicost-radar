@@ -594,6 +594,44 @@ function getParsed(fp, parseFn, cutoffMs) {
   return data;
 }
 
+// ---------- 历史归档 ----------
+// 工具会滚动清理自己的日志，清掉之后统计就永远缺一块。这里把每天的 token 量落盘，
+// 只存 token 不存成本（成本随定价随时重算）。
+const ARCHIVE_PATH = path.join(__dirname, 'data', 'archive.json');
+let archive = {}; // date -> app -> model -> {in,cw,cr,out}
+try {
+  archive = JSON.parse(fs.readFileSync(ARCHIVE_PATH, 'utf8'));
+} catch { archive = {}; }
+let archiveDirty = false;
+
+function mergeArchive(daily, todayStr) {
+  for (const [date, byApp] of daily) {
+    if (date >= todayStr) continue; // 今天还在变，等它过去
+    if (!archive[date]) archive[date] = {};
+    for (const [app, models] of Object.entries(byApp)) {
+      if (!archive[date][app]) archive[date][app] = {};
+      for (const [model, u] of Object.entries(models)) {
+        const old = archive[date][app][model];
+        const tok = u.in + u.cw + u.cr + u.out;
+        // 日志被裁剪后重算可能变小，保留更大的那份
+        if (old && (old.in + old.cw + old.cr + old.out) >= tok) continue;
+        archive[date][app][model] = { in: u.in, cw: u.cw, cr: u.cr, out: u.out };
+        archiveDirty = true;
+      }
+    }
+  }
+  if (archiveDirty) saveArchive();
+}
+function saveArchive() {
+  try {
+    fs.mkdirSync(path.dirname(ARCHIVE_PATH), { recursive: true });
+    const tmp = ARCHIVE_PATH + '.tmp';
+    fs.writeFileSync(tmp, JSON.stringify(archive));
+    fs.renameSync(tmp, ARCHIVE_PATH); // 原子写，避免半截文件
+    archiveDirty = false;
+  } catch (e) { console.error('archive:', e.message); }
+}
+
 // ---------- 聚合 ----------
 let aggCache = { at: 0, days: 0, body: null };
 
@@ -699,6 +737,29 @@ function aggregate(days) {
   }
   sessions.sort((a, b) => b.end - a.end);
 
+  // 落盘归档，再把日志里已经消失、只有归档才有的天数补回来
+  mergeArchive(daily, todayStr);
+  const archivedDates = [];
+  const rangeStart = localDate(now - days * 86400000);
+  for (const [date, archByApp] of Object.entries(archive)) {
+    if (date < rangeStart || date >= todayStr || daily.has(date)) continue;
+    archivedDates.push(date);
+    const rebuilt = {};
+    for (const [app, archModels] of Object.entries(archByApp)) {
+      rebuilt[app] = {};
+      for (const [model, t] of Object.entries(archModels)) {
+        const cost = costOf(model, t);
+        rebuilt[app][model] = { ...t, cost };
+        if (!models.has(model)) models.set(model, {});
+        const mm = models.get(model);
+        if (!mm[app]) mm[app] = zero();
+        addU(mm[app], t, cost);
+        addU(totals.all, t, cost);
+      }
+    }
+    daily.set(date, rebuilt);
+  }
+
   // 连续活跃天数（从今天往回数）
   let streak = 0;
   for (let i = 0; i <= days; i++) {
@@ -720,6 +781,8 @@ function aggregate(days) {
     generatedAt: now, days, todayStr,
     apps: SOURCES.filter(s => appsSeen.has(s.id)).map(s => ({ id: s.id, name: s.name })),
     detected: detectTools(appsSeen),
+    archivedDates, // 这些天的数据来自归档（原始日志已被工具清理）
+    archiveDays: Object.keys(archive).length,
     daily: [...daily.entries()].sort((a, b) => a[0] < b[0] ? -1 : 1)
       .map(([date, byApp]) => ({ date, byApp })),
     models: [...models.entries()].map(([model, byApp]) => {
@@ -749,6 +812,38 @@ function aggregate(days) {
   };
   aggCache = { at: now, days, body };
   return body;
+}
+
+// ---------- 跨工具历史搜索 ----------
+// 所有数据源的用户输入/命令都在解析缓存里，直接全量扫一遍即可（词全部命中才算）
+function searchEvents(q, days, limit) {
+  const terms = String(q).toLowerCase().split(/\s+/).filter(Boolean);
+  if (!terms.length) return [];
+  const cutoffMs = Date.now() - (days + 1) * 86400000;
+  const hits = [];
+  for (const d of collectSessionData(cutoffMs)) {
+    let sessCost = 0, sessTok = 0;
+    const modelSet = new Set();
+    for (const en of d.usageEntries) {
+      const m = cleanModel(en.model);
+      modelSet.add(m);
+      sessCost += costOf(m, en.u);
+      sessTok += en.u.in + en.u.cw + en.u.cr + en.u.out;
+    }
+    for (const ev of d.events) {
+      const low = ev.text.toLowerCase();
+      if (!terms.every(t => low.includes(t))) continue;
+      const at = low.indexOf(terms[0]);
+      hits.push({
+        app: d.app, id: d.id, cwd: d.cwd, agent: d.agent,
+        ts: ev.ts || d.lastTs, kind: ev.kind,
+        snippet: (at > 60 ? '…' : '') + ev.text.slice(Math.max(0, at - 60), at + 180),
+        sessionCost: sessCost, sessionTokens: sessTok, models: [...modelSet],
+      });
+    }
+  }
+  hits.sort((a, b) => (b.ts || 0) - (a.ts || 0));
+  return hits.slice(0, limit);
 }
 
 function sessionDetail(app, id) {
@@ -795,6 +890,11 @@ const server = http.createServer(async (req, res) => {
     if (u.pathname === '/api/data') {
       const days = Math.min(90, Math.max(1, parseInt(u.searchParams.get('days') || '7', 10)));
       json(200, aggregate(days));
+    } else if (u.pathname === '/api/search') {
+      const q = u.searchParams.get('q') || '';
+      const sdays = Math.min(365, Math.max(1, parseInt(u.searchParams.get('days') || '90', 10)));
+      const limit = Math.min(200, Math.max(1, parseInt(u.searchParams.get('limit') || '60', 10)));
+      json(200, { q, results: q.trim() ? searchEvents(q, sdays, limit) : [] });
     } else if (u.pathname === '/api/session') {
       const detail = sessionDetail(u.searchParams.get('app'), u.searchParams.get('id'));
       json(detail ? 200 : 404, detail || { error: 'not found' });
