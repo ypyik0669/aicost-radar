@@ -425,6 +425,29 @@
   .dg .di .dic { margin-left: auto; font-variant-numeric: tabular-nums; color: var(--tm); }
   .dgok { color: var(--good); font-size: 12px; padding: 8px 2px; }
 
+  /* 用量透视:自选 数据源×模型×日期 */
+  .pvbar { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 12px; }
+  .pvbar select {
+    background: var(--chip); border: 1px solid var(--line); border-radius: 8px; color: var(--tp);
+    padding: 6px 9px; font-size: 12px; font-family: inherit; outline: none; max-width: 210px;
+  }
+  .pvbar select:focus { border-color: var(--cyan); }
+  .pvnums { display: flex; gap: 26px; flex-wrap: wrap; margin-bottom: 10px; }
+  .pvnums .pn .l { font-size: 11px; color: var(--tm); }
+  .pvnums .pn .v { font-size: 22px; font-weight: 700; letter-spacing: -.4px; margin-top: 2px; font-variant-numeric: tabular-nums; }
+  .pvnums .pn .s { font-size: 10.5px; color: var(--ts); margin-top: 2px; }
+  .pvtok { display: flex; height: 9px; border-radius: 5px; overflow: hidden; background: var(--track); margin: 6px 0 5px; }
+  .pvleg { display: flex; gap: 12px; flex-wrap: wrap; font-size: 10.5px; color: var(--ts); margin-bottom: 4px; }
+  .pvleg i { width: 8px; height: 8px; border-radius: 2px; display: inline-block; margin-right: 4px; }
+  .pvtrend { display: flex; align-items: flex-end; gap: 2px; height: 54px; margin-top: 10px; }
+  .pvtrend .ptb { flex: 1; background: rgba(34,211,238,.35); border-radius: 2px 2px 0 0; min-height: 2px; cursor: pointer; transition: background .15s; }
+  .pvtrend .ptb:hover { background: rgba(34,211,238,.6); }
+  .pvtrend .ptb.on { background: var(--cyan); }
+  .pvsess { margin-top: 10px; }
+  .pvsess .di { display: flex; align-items: center; gap: 8px; font-size: 11px; color: var(--ts); cursor: pointer; padding: 4px 6px; border-radius: 7px; }
+  .pvsess .di:hover { background: rgba(34,211,238,.08); }
+  .pvsess .di .dic { margin-left: auto; color: var(--tm); font-variant-numeric: tabular-nums; }
+
   /* 本机 AI 工具探测 */
   .tools { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 8px; }
   .tool { display: flex; align-items: flex-start; gap: 9px; border: 1px solid var(--line); border-radius: 12px; padding: 9px 12px; background: var(--chip); }
@@ -528,6 +551,16 @@
   </h2>
   <svg id="chart" width="100%" height="200"></svg>
   <div class="legend" id="legend"></div>
+</div>
+
+<div class="card" id="pivotCard">
+  <h2>🔬 用量透视 <span class="hint">自选数据源×模型×日期看 token 量 · 点趋势条选日期</span></h2>
+  <div class="pvbar">
+    <select id="pvApp"></select>
+    <select id="pvModel"></select>
+    <select id="pvDay"></select>
+  </div>
+  <div id="pvOut"></div>
 </div>
 
 <div class="card" id="heatCard">
@@ -867,6 +900,7 @@ function render() {
   })));
   renderCache();
   renderFun();
+  renderPivot();
   renderBlocks();
   renderErrors();
   renderSubs();
@@ -1312,6 +1346,83 @@ function renderFun() {
     { fl: '🧊 缓存省下', fv: fmtCost(s.savedByCache), fs: '若无缓存要多花这么多' },
   ].map(f => `<div class="funit"><div class="fl">${f.fl}</div><div class="fv">${f.fv}</div><div class="fs">${f.fs}</div></div>`).join('');
 }
+
+/* ---------- 用量透视:数据源 × 模型 × 日期 任意组合 ---------- */
+const PV_TOKS = [['in', '输入', '#3987e5'], ['cw', '缓存写', '#8b5cf6'], ['cr', '缓存读', '#22d3ee'], ['out', '输出', '#34d399']];
+let PV_SESS = [];
+function pvFill(sel, opts, cur) {
+  sel.innerHTML = opts.map(([v, label]) => `<option value="${esc(v)}"${v === cur ? ' selected' : ''}>${esc(label)}</option>`).join('');
+  if (![...sel.options].some(o => o.selected)) sel.value = opts[0][0]; // 选中的模型/日期在新范围里没了就回落到全部
+}
+function renderPivot() {
+  // 下拉展开着或正在操作时别重建,不然 30 秒自动刷新会把菜单顶掉
+  if ([...document.querySelectorAll('.pvbar select')].includes(document.activeElement)) return;
+  pvFill($('pvApp'), [['all', '全部数据源'], ...(DATA.apps || []).map(a => [a.id, a.name])], $('pvApp').value || 'all');
+  pvFill($('pvModel'), [['all', '全部模型'], ...DATA.models.map(m => [m.model, m.model])], $('pvModel').value || 'all');
+  const dates = DATA.daily.map(d => d.date).sort().reverse();
+  pvFill($('pvDay'), [['all', days + ' 天全部'], ...dates.map(d => [d, d + (d === DATA.todayStr ? '（今天）' : '')])], $('pvDay').value || 'all');
+  const selA = $('pvApp').value, selM = $('pvModel').value, selD = $('pvDay').value;
+
+  const sel = { in: 0, cw: 0, cr: 0, out: 0, cost: 0 };
+  const tokOf = u => u.in + u.cw + u.cr + u.out;
+  let allTok = 0;             // 同日期范围、不筛模型/来源的总 token,算占比
+  const trend = [];           // 筛选组合的逐日 token 量
+  for (const d of DATA.daily) {
+    let dTok = 0, dCost = 0;
+    const inDay = selD === 'all' || d.date === selD;
+    for (const [app, ms] of Object.entries(d.byApp)) {
+      for (const [model, u] of Object.entries(ms)) {
+        if (inDay) allTok += tokOf(u);
+        if (selA !== 'all' && app !== selA) continue;
+        if (selM !== 'all' && model !== selM) continue;
+        dTok += tokOf(u); dCost += u.cost;
+        if (inDay) { sel.in += u.in; sel.cw += u.cw; sel.cr += u.cr; sel.out += u.out; sel.cost += u.cost; }
+      }
+    }
+    trend.push({ date: d.date, tok: dTok, cost: dCost });
+  }
+  const tokTotal = tokOf(sel);
+  PV_SESS = DATA.sessions.filter(s =>
+    (selA === 'all' || s.app === selA) &&
+    (selM === 'all' || s.models.includes(selM)) &&
+    (selD === 'all' || dstr(new Date(s.end)) === selD))
+    .sort((a, b) => tokSum(b.u) - tokSum(a.u)).slice(0, 6);
+  if (!tokTotal && sel.cost < 0.0001) { $('pvOut').innerHTML = '<div class="muted">这个组合在当前范围内没有用量,换个筛选试试</div>'; return; }
+  const maxT = Math.max(1, ...trend.map(t => t.tok));
+  const cacheDen = sel.in + sel.cw + sel.cr;
+  $('pvOut').innerHTML = `
+    <div class="pvnums">
+      <div class="pn"><div class="l">Tokens</div><div class="v">${fmtTok(tokTotal)}</div><div class="s">占同期全部 token 的 ${allTok > 0 ? (tokTotal / allTok < 0.001 ? '<0.1' : (tokTotal / allTok * 100).toFixed(1)) : '0'}%</div></div>
+      <div class="pn"><div class="l">成本</div><div class="v">${fmtCost(sel.cost)}</div><div class="s">${PV_SESS.length ? PV_SESS.length + (PV_SESS.length >= 6 ? '+' : '') + ' 个会话命中' : '无会话记录'}</div></div>
+      <div class="pn"><div class="l">缓存命中率</div><div class="v">${cacheDen ? (sel.cr / cacheDen * 100).toFixed(1) : '0'}%</div><div class="s">读取 ${fmtTok(sel.cr)}</div></div>
+    </div>
+    <div class="pvtok">${PV_TOKS.map(([k, , c]) => `<div style="width:${tokTotal ? (sel[k] / tokTotal * 100).toFixed(2) : 0}%;background:${c}"></div>`).join('')}</div>
+    <div class="pvleg">${PV_TOKS.map(([k, n, c]) => `<span><i style="background:${c}"></i>${n} ${fmtTok(sel[k])}</span>`).join('')}</div>
+    <div class="pvtrend">${trend.map(t => `<div class="ptb${t.date === selD ? ' on' : ''}" data-d="${t.date}" data-t="${t.tok}" data-c="${t.cost.toFixed(2)}" style="height:${Math.max(3, t.tok / maxT * 100).toFixed(0)}%"></div>`).join('')}</div>
+    <div class="pvsess">${PV_SESS.map((s, i) => `
+      <div class="di" data-i="${i}">
+        <span class="app-tag ${s.agent ? 'agent' : s.app}">${s.agent ? '子代理' : appName(s.app)}</span>
+        <span class="ellip" style="max-width:250px">${esc(s.title)}</span>
+        <span class="dic">${fmtTok(tokSum(s.u))} · ${fmtCost(s.u.cost)}</span>
+      </div>`).join('')}</div>`;
+}
+for (const id of ['pvApp', 'pvModel', 'pvDay']) $(id).addEventListener('change', () => { $(id).blur(); renderPivot(); });
+$('pvOut').addEventListener('click', e => {
+  const bar = e.target.closest('.ptb');
+  if (bar) { // 点趋势条选中那天,再点一次取消
+    $('pvDay').value = $('pvDay').value === bar.dataset.d ? 'all' : bar.dataset.d;
+    renderPivot();
+    return;
+  }
+  const di = e.target.closest('.di[data-i]');
+  if (di && PV_SESS[+di.dataset.i]) openDrawer(PV_SESS[+di.dataset.i]);
+});
+$('pvOut').addEventListener('mousemove', e => {
+  const bar = e.target.closest('.ptb');
+  if (!bar) return hideTip();
+  showTip(e, `<div class="t">${bar.dataset.d}</div><div class="r"><span>Tokens</span><b>${fmtTok(+bar.dataset.t)}</b></div><div class="r"><span>成本</span><b>${fmtCost(+bar.dataset.c)}</b></div><div class="r muted"><span>点击筛选这一天</span></div>`);
+});
+$('pvOut').addEventListener('mouseleave', hideTip);
 
 /* ---------- 5 小时计费窗口(ccusage 同款分窗算法,服务端算好) ---------- */
 function renderBlocks() {
@@ -1964,7 +2075,7 @@ $('posterBtn').addEventListener('click', () => {
 
 /* ---------- 卡片排序 + 显隐 + 双列瀑布流 ---------- */
 const BLOCKS = [
-  ['chartCard', '每日成本图'], ['heatCard', '活动热力图'], ['cacheCard', '缓存效率'],
+  ['chartCard', '每日成本图'], ['pivotCard', '用量透视'], ['heatCard', '活动热力图'], ['cacheCard', '缓存效率'],
   ['blockCard', '5小时窗口'], ['errCard', '错误分析'],
   ['duoA', '模型 + 项目'], ['duoB', '命令 + 趣味'], ['subCard', '订阅回本'], ['diagCard', '省钱诊断'],
   ['toolCard', '本机 AI 工具'], ['achCard', '成就'], ['sessCard', '会话记录'],
